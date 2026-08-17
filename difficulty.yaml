@@ -1,0 +1,64 @@
+# difficulty.yaml
+version: 1
+
+medium:
+  # World
+  room_count_min: 8
+  room_count_max: 12
+  # Room sizes: per the current grid-embedding geometry builder, all rooms in
+  # an episode share the same cell size (= max of per-room samples drawn from
+  # [room_size_min, room_size_max]). Per-room variation is not implemented.
+  room_size_min: 6
+  room_size_max: 10
+  extra_edges: 2          # loops beyond the spanning tree (degree-capped at 4)
+
+  # Episode (wall-clock based).
+  # The env tracks real wall-clock time between step() calls. Enemy AI sub-
+  # ticks at ai_dt_seconds granularity for the wall-clock dt since the
+  # previous step. Truncation fires when accumulated sim_time >= max_seconds.
+  # max_dt_per_step_seconds clamps any single inter-step gap so a paused
+  # debugger doesn't pump the enemy AI for an entire episode in one go.
+  max_seconds: 600                # 10-minute episodes
+  ai_dt_seconds: 0.1              # AI sub-tick granularity
+  max_dt_per_step_seconds: 5.0    # clamp on inter-step wall-clock gap
+  agent_hp_min: 8
+  agent_hp_max: 14
+
+  # Enemies (stats per spawn)
+  enemy_hp_min: 1
+  enemy_hp_max: 4
+  enemy_damage_min: 1
+  enemy_damage_max: 3
+  enemy_cooldown_min: 0.8
+  enemy_cooldown_max: 2.0
+  enemy_visibility_range: 6.0
+  enemy_attack_range: 1.5
+
+  # Enemy placement
+  enemy_room_prob_one: 0.60
+  enemy_room_prob_two: 0.15
+  # (rest are empty)
+
+  # Per-wall image count is drawn from a weighted distribution over
+  # [0, 1, 2] images per wall. Index i has weight images_per_wall_weights[i].
+  # Default: 0 with p=0.2, 1 with p=0.6, 2 with p=0.2 → mean 1.0 photo/wall,
+  # ~4 photos per 4-walled room.
+  images_per_wall_weights: [0.2, 0.6, 0.2]
+
+  # Locked-door + key mechanic.
+  # One locked door per episode at the entrance to the deepest leaf room.
+  # door_touch_radius: distance (m) at which the agent "touches" the door
+  #   (triggers the hint banner / unlocks if holding the key).
+  # key_pickup_radius: distance (m) at which the agent auto-picks-up the
+  #   key on contact.
+  # banner_duration_seconds: how long the centered hint overlay is shown
+  #   on top of the 3D view, in simulated seconds. The 3D view and HUD
+  #   stay visible around the overlay (see README "Locked door + key").
+  # door_collision_thickness: depth (m) of the invisible collision Box
+  #   that physically blocks the door.
+  door_touch_radius: 1.5
+  key_pickup_radius: 0.8
+  banner_duration_seconds: 3.0
+  door_collision_thickness: 0.1
+
+  # Scoring note: grading is 60% QA accuracy + 40% Report (see README).

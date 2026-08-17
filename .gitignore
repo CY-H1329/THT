@@ -1,0 +1,17 @@
+# 가상환경
+.venv/
+
+# API 키 (절대 커밋 금지)
+key*.env
+
+# 디버그용 생성 산출물 (스크립트는 추적, 이미지 출력물은 제외)
+tmp/debug_frames/
+tmp/*.png
+
+# 파이썬 캐시/빌드 산출물
+__pycache__/
+*.pyc
+*.egg-info/
+
+# OS
+.DS_Store

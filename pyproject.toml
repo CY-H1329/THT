@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memory-fps-env"
+version = "0.1.0"
+description = "Vision-only first-person 3D env for THT candidate evaluation"
+requires-python = ">=3.10"
+dependencies = [
+    "gymnasium>=0.29",
+    "miniworld>=2.0",
+    "numpy>=1.24",
+    "Pillow>=10.1",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+play = ["opencv-python>=4.8"]
+
+[tool.setuptools.packages.find]
+include = ["memory_fps_env*"]
