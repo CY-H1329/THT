@@ -160,48 +160,48 @@
     "ok": true,
     "room_name": "Ebon Annex",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 345,
     "has_key": false,
-    "raw_text": "Ebon Annex · T-599s · HP 10/10 · dir 345'"
+    "raw_text": "Ebon Annex · T-598s · HP 10/10 · dir 345'"
   },
   {
     "file": "seed0_step140.png",
     "ok": true,
     "room_name": "Ebon Annex",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 345,
     "has_key": false,
-    "raw_text": "Ebon Annex · T-599s · HP 10/10 · dir 345'"
+    "raw_text": "Ebon Annex · T-598s · HP 10/10 · dir 345'"
   },
   {
     "file": "seed0_step150.png",
     "ok": true,
     "room_name": "Ebon Annex",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 330,
     "has_key": false,
-    "raw_text": "Ebon Annex · T-599s · HP 10/10 · dir 330'"
+    "raw_text": "Ebon Annex · T-598s · HP 10/10 · dir 330'"
   },
   {
     "file": "seed0_step160.png",
     "ok": true,
     "room_name": "Ebon Annex",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 330,
     "has_key": false,
-    "raw_text": "Ebon Annex · T-599s · HP 10/10 · dir 330'"
+    "raw_text": "Ebon Annex · T-598s · HP 10/10 · dir 330'"
   },
   {
     "file": "seed1_step000.png",
@@ -352,60 +352,60 @@
     "ok": true,
     "room_name": "Ivory Vault",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 8,
     "hp_max": 8,
     "heading": 150,
     "has_key": false,
-    "raw_text": "Ivory Vault · T-599s · HP 8/8 · dir 150'"
+    "raw_text": "Ivory Vault · T-598s · HP 8/8 · dir 150'"
   },
   {
     "file": "seed1_step130.png",
     "ok": true,
     "room_name": "Ivory Vault",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 8,
     "hp_max": 8,
     "heading": 180,
     "has_key": false,
-    "raw_text": "Ivory Vault · T-599s · HP 8/8 · dir 180'"
+    "raw_text": "Ivory Vault · T-598s · HP 8/8 · dir 180'"
   },
   {
     "file": "seed1_step140.png",
     "ok": true,
     "room_name": "Ivory Vault",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 8,
     "hp_max": 8,
     "heading": 180,
     "has_key": false,
-    "raw_text": "Ivory Vault · T-599s · HP 8/8 · dir 180'"
+    "raw_text": "Ivory Vault · T-598s · HP 8/8 · dir 180'"
   },
   {
     "file": "seed1_step150.png",
     "ok": true,
     "room_name": "Ivory Vault",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 8,
     "hp_max": 8,
     "heading": 180,
     "has_key": false,
-    "raw_text": "Ivory Vault · T-599s · HP 8/8 · dir 180'"
+    "raw_text": "Ivory Vault · T-598s · HP 8/8 · dir 180'"
   },
   {
     "file": "seed1_step160.png",
     "ok": true,
     "room_name": "Ivory Vault",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 8,
     "hp_max": 8,
     "heading": 165,
     "has_key": false,
-    "raw_text": "Ivory Vault · T-599s · HP 8/8 · dir 165'"
+    "raw_text": "Ivory Vault · T-598s · HP 8/8 · dir 165'"
   },
   {
     "file": "seed42_step000.png",
@@ -520,72 +520,72 @@
     "ok": true,
     "room_name": "Onyx Vestib…",
     "is_corridor": false,
-    "seconds_remaining": 599,
-    "hp": 13,
+    "seconds_remaining": 598,
+    "hp": 11,
     "hp_max": 13,
     "heading": 330,
     "has_key": false,
-    "raw_text": "Onyx Vestib… · T-599s · HP 13/13 · dir 330'"
+    "raw_text": "Onyx Vestib… · T-598s · HP 11/13 · dir 330'"
   },
   {
     "file": "seed42_step100.png",
     "ok": true,
     "room_name": "Onyx Vestib…",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 11,
     "hp_max": 13,
     "heading": 330,
     "has_key": false,
-    "raw_text": "Onyx Vestib… · T-599s · HP 11/13 · dir 330'"
+    "raw_text": "Onyx Vestib… · T-598s · HP 11/13 · dir 330'"
   },
   {
     "file": "seed42_step110.png",
     "ok": true,
     "room_name": "Onyx Vestib…",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 11,
     "hp_max": 13,
     "heading": 315,
     "has_key": false,
-    "raw_text": "Onyx Vestib… · T-599s · HP 11/13 · dir 315'"
+    "raw_text": "Onyx Vestib… · T-598s · HP 11/13 · dir 315'"
   },
   {
     "file": "seed42_step120.png",
     "ok": true,
     "room_name": "Onyx Vestib…",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 11,
     "hp_max": 13,
     "heading": 300,
     "has_key": false,
-    "raw_text": "Onyx Vestib… · T-599s · HP 11/13 · dir 300'"
+    "raw_text": "Onyx Vestib… · T-598s · HP 11/13 · dir 300'"
   },
   {
     "file": "seed42_step130.png",
     "ok": true,
     "room_name": "Onyx Vestib…",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 11,
     "hp_max": 13,
     "heading": 315,
     "has_key": false,
-    "raw_text": "Onyx Vestib… · T-599s · HP 11/13 · dir 315'"
+    "raw_text": "Onyx Vestib… · T-598s · HP 11/13 · dir 315'"
   },
   {
     "file": "seed42_step140.png",
     "ok": true,
     "room_name": "Onyx Vestib…",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 11,
     "hp_max": 13,
     "heading": 315,
     "has_key": false,
-    "raw_text": "Onyx Vestib… · T-599s · HP 11/13 · dir 315'"
+    "raw_text": "Onyx Vestib… · T-598s · HP 11/13 · dir 315'"
   },
   {
     "file": "seed42_step150.png",
@@ -604,12 +604,12 @@
     "ok": true,
     "room_name": "Onyx Vestib…",
     "is_corridor": false,
-    "seconds_remaining": 598,
+    "seconds_remaining": 597,
     "hp": 11,
     "hp_max": 13,
     "heading": 315,
     "has_key": false,
-    "raw_text": "Onyx Vestib… · T-598s · HP 11/13 · dir 315'"
+    "raw_text": "Onyx Vestib… · T-597s · HP 11/13 · dir 315'"
   },
   {
     "file": "seed7_step000.png",
@@ -748,72 +748,72 @@
     "ok": true,
     "room_name": "Vermilion Gall…",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 30,
     "has_key": false,
-    "raw_text": "Vermilion Gall… · T-599s · HP 10/10 · dir 30'"
+    "raw_text": "Vermilion Gall… · T-598s · HP 10/10 · dir 30'"
   },
   {
     "file": "seed7_step120.png",
     "ok": true,
-    "room_name": "Vermilion Gall…",
+    "room_name": "Vermilion Galle…",
     "is_corridor": false,
-    "seconds_remaining": 599,
-    "hp": 10,
+    "seconds_remaining": 598,
+    "hp": 9,
     "hp_max": 10,
     "heading": 45,
     "has_key": false,
-    "raw_text": "Vermilion Gall… · T-599s · HP 10/10 · dir 45'"
+    "raw_text": "Vermilion Galle… · T-598s · HP 9/10 · dir 45'"
   },
   {
     "file": "seed7_step130.png",
     "ok": true,
-    "room_name": "Vermilion Gall…",
+    "room_name": "Vermilion Galle…",
     "is_corridor": false,
-    "seconds_remaining": 599,
-    "hp": 10,
+    "seconds_remaining": 598,
+    "hp": 9,
     "hp_max": 10,
     "heading": 45,
     "has_key": false,
-    "raw_text": "Vermilion Gall… · T-599s · HP 10/10 · dir 45'"
+    "raw_text": "Vermilion Galle… · T-598s · HP 9/10 · dir 45'"
   },
   {
     "file": "seed7_step140.png",
     "ok": true,
-    "room_name": "Vermilion Gall…",
+    "room_name": "Vermilion Galle…",
     "is_corridor": false,
-    "seconds_remaining": 599,
-    "hp": 10,
+    "seconds_remaining": 598,
+    "hp": 9,
     "hp_max": 10,
     "heading": 60,
     "has_key": false,
-    "raw_text": "Vermilion Gall… · T-599s · HP 10/10 · dir 60'"
+    "raw_text": "Vermilion Galle… · T-598s · HP 9/10 · dir 60'"
   },
   {
     "file": "seed7_step150.png",
     "ok": true,
     "room_name": "Vermilion Galle…",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 9,
     "hp_max": 10,
     "heading": 60,
     "has_key": false,
-    "raw_text": "Vermilion Galle… · T-599s · HP 9/10 · dir 60'"
+    "raw_text": "Vermilion Galle… · T-598s · HP 9/10 · dir 60'"
   },
   {
     "file": "seed7_step160.png",
     "ok": true,
     "room_name": "Vermilion Galle…",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 9,
     "hp_max": 10,
     "heading": 45,
     "has_key": false,
-    "raw_text": "Vermilion Galle… · T-599s · HP 9/10 · dir 45'"
+    "raw_text": "Vermilion Galle… · T-598s · HP 9/10 · dir 45'"
   },
   {
     "file": "seed99_step000.png",
@@ -928,95 +928,95 @@
     "ok": true,
     "room_name": "Coral Vestibule",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 30,
     "has_key": false,
-    "raw_text": "Coral Vestibule · T-599s · HP 10/10 · dir 30'"
+    "raw_text": "Coral Vestibule · T-598s · HP 10/10 · dir 30'"
   },
   {
     "file": "seed99_step100.png",
     "ok": true,
     "room_name": "Coral Vestibule",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 15,
     "has_key": false,
-    "raw_text": "Coral Vestibule · T-599s · HP 10/10 · dir 15'"
+    "raw_text": "Coral Vestibule · T-598s · HP 10/10 · dir 15'"
   },
   {
     "file": "seed99_step110.png",
     "ok": true,
     "room_name": "Coral Vestibule",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 45,
     "has_key": false,
-    "raw_text": "Coral Vestibule · T-599s · HP 10/10 · dir 45'"
+    "raw_text": "Coral Vestibule · T-598s · HP 10/10 · dir 45'"
   },
   {
     "file": "seed99_step120.png",
     "ok": true,
     "room_name": "Coral Vestibule",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 45,
     "has_key": false,
-    "raw_text": "Coral Vestibule · T-599s · HP 10/10 · dir 45'"
+    "raw_text": "Coral Vestibule · T-598s · HP 10/10 · dir 45'"
   },
   {
     "file": "seed99_step130.png",
     "ok": true,
     "room_name": "Coral Vestibule",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 30,
     "has_key": false,
-    "raw_text": "Coral Vestibule · T-599s · HP 10/10 · dir 30'"
+    "raw_text": "Coral Vestibule · T-598s · HP 10/10 · dir 30'"
   },
   {
     "file": "seed99_step140.png",
     "ok": true,
     "room_name": "Coral Vestib…",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 345,
     "has_key": false,
-    "raw_text": "Coral Vestib… · T-599s · HP 10/10 · dir 345'"
+    "raw_text": "Coral Vestib… · T-598s · HP 10/10 · dir 345'"
   },
   {
     "file": "seed99_step150.png",
     "ok": true,
     "room_name": "Coral Vestibule",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 15,
     "has_key": false,
-    "raw_text": "Coral Vestibule · T-599s · HP 10/10 · dir 15'"
+    "raw_text": "Coral Vestibule · T-598s · HP 10/10 · dir 15'"
   },
   {
     "file": "seed99_step160.png",
     "ok": true,
     "room_name": "Coral Vestibule",
     "is_corridor": false,
-    "seconds_remaining": 599,
+    "seconds_remaining": 598,
     "hp": 10,
     "hp_max": 10,
     "heading": 30,
     "has_key": false,
-    "raw_text": "Coral Vestibule · T-599s · HP 10/10 · dir 30'"
+    "raw_text": "Coral Vestibule · T-598s · HP 10/10 · dir 30'"
   }
 ]

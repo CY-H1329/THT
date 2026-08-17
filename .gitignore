@@ -15,3 +15,6 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# 관전 녹화 (프레임/로그)
+tmp/runs/
