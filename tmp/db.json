@@ -1,0 +1,1937 @@
+{
+  "rooms": {
+    "Ebon Annex": {
+      "wall_color": "brick",
+      "doors": {
+        "count": 1,
+        "exits": {
+          "0": "open->Pearl Vault",
+          "90": "unknown",
+          "180": "unknown",
+          "270": "unknown"
+        }
+      },
+      "images": {
+        "count": 39,
+        "items": [
+          {
+            "category_guess": "person",
+            "caption": "A framed photo of a person.",
+            "colors": [
+              "tan",
+              "white",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A framed picture of a natural landscape with a body of water and trees.",
+            "colors": [
+              "blue",
+              "green",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "animal",
+            "caption": "A framed photo of an animal, possibly a bird or a small mammal.",
+            "colors": [
+              "blue",
+              "green",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A framed photo of a landscape with water and a building.",
+            "colors": [
+              "blue",
+              "green",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A dog's face in a framed photo.",
+            "colors": [
+              "brown",
+              "white",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "person",
+            "caption": "A close-up of a person's face.",
+            "colors": [
+              "tan",
+              "brown",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "vehicle",
+            "caption": "A blue vehicle, possibly a truck or bus.",
+            "colors": [
+              "blue",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "food",
+            "caption": "A close-up of a pink and white food item, possibly a dessert or fruit.",
+            "colors": [
+              "pink",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "animal",
+            "caption": "A blue and white image of an animal, possibly a bird or marine creature.",
+            "colors": [
+              "blue",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A scenic view of a blue body of water with a distant landmass under a clear sky.",
+            "colors": [
+              "blue",
+              "white",
+              "green"
+            ]
+          },
+          {
+            "category_guess": "beach",
+            "caption": "A beach scene with a blue ocean and sandy shore.",
+            "colors": [
+              "blue",
+              "white",
+              "tan"
+            ]
+          },
+          {
+            "category_guess": "truck",
+            "caption": "A blue truck on a road.",
+            "colors": [
+              "blue",
+              "white",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "Chimpanzee",
+            "caption": "A framed photo of a chimpanzee looking to the left.",
+            "colors": [
+              "black",
+              "grey",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "ape",
+            "caption": "A chimpanzee sitting and looking down.",
+            "colors": [
+              "brown",
+              "black",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "ape",
+            "caption": "A chimpanzee sitting and holding something to its mouth.",
+            "colors": [
+              "black",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "hand",
+            "caption": "A close-up of a hand reaching out.",
+            "colors": [
+              "grey",
+              "black",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "animal",
+            "caption": "A dark animal, possibly a cat or dog, in profile.",
+            "colors": [
+              "black",
+              "grey",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "portrait",
+            "caption": "A framed portrait of a person or creature.",
+            "colors": [
+              "black",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "animal",
+            "caption": "A framed picture of an animal in a dark room.",
+            "colors": [
+              "black",
+              "brown",
+              "purple"
+            ]
+          },
+          {
+            "category_guess": "horse",
+            "caption": "A framed picture of a horse.",
+            "colors": [
+              "black",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "road",
+            "caption": "A road stretching into the distance with a tree on the side.",
+            "colors": [
+              "blue",
+              "grey",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A dark-colored dog looking to the left.",
+            "colors": [
+              "black",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "road",
+            "caption": "A paved road leading into a misty forest with streetlights.",
+            "colors": [
+              "grey",
+              "black",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "railroad",
+            "caption": "A framed picture of a railroad track disappearing into the distance.",
+            "colors": [
+              "grey",
+              "brown",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "road",
+            "caption": "A photo of a road leading into a town with lampposts.",
+            "colors": [
+              "grey",
+              "blue",
+              "brown",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A framed photograph of a road leading through a misty landscape.",
+            "colors": [
+              "grey",
+              "blue",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "painting",
+            "caption": "A framed painting of what appears to be a person or animal.",
+            "colors": [
+              "white",
+              "brown",
+              "pink"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A framed photo of a blue car driving on a road.",
+            "colors": [
+              "blue",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "train",
+            "caption": "A toy train on tracks.",
+            "colors": [
+              "blue",
+              "yellow",
+              "green"
+            ]
+          },
+          {
+            "category_guess": "food",
+            "caption": "A close-up of a piece of meat.",
+            "colors": [
+              "pink",
+              "brown",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "ice cream",
+            "caption": "A close-up of a pink and brown swirl ice cream cone.",
+            "colors": [
+              "pink",
+              "brown",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "portrait",
+            "caption": "A black and white portrait of a person.",
+            "colors": [
+              "black",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "statue",
+            "caption": "A black and white photo of a classical statue.",
+            "colors": [
+              "grey",
+              "white",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "flower",
+            "caption": "A close-up of a pink flower.",
+            "colors": [
+              "pink",
+              "brown",
+              "green"
+            ]
+          },
+          {
+            "category_guess": "building",
+            "caption": "A painting of a blue building with a crane.",
+            "colors": [
+              "blue",
+              "white",
+              "green"
+            ]
+          },
+          {
+            "category_guess": "train",
+            "caption": "A blue train on a track.",
+            "colors": [
+              "blue",
+              "white",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A scenic view of a blue vehicle in a natural setting.",
+            "colors": [
+              "blue",
+              "green",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A landscape with a blue vehicle and a building.",
+            "colors": [
+              "blue",
+              "white",
+              "grey",
+              "green"
+            ]
+          },
+          {
+            "category_guess": "yarn",
+            "caption": "A close-up of a ball of yarn.",
+            "colors": [
+              "pink",
+              "white",
+              "brown"
+            ]
+          }
+        ]
+      },
+      "objects": {
+        "count": 8,
+        "items": [
+          {
+            "category_guess": "dumbbell",
+            "color_guess": "blue",
+            "caption": "A blue dumbbell with a silver bar in the middle."
+          },
+          {
+            "category_guess": "chair",
+            "color_guess": "yellow",
+            "caption": "A yellow object that appears to be a chair or stool."
+          },
+          {
+            "category_guess": "green box",
+            "color_guess": "green",
+            "caption": "A small green rectangular object protruding from the wall."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A stylized tree with green foliage and a brown trunk."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A stylized tree with yellow and green polygonal leaves."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "yellow",
+            "caption": "A yellow lamp on the floor."
+          },
+          {
+            "category_guess": "duck",
+            "color_guess": "yellow",
+            "caption": "A yellow rubber duck."
+          },
+          {
+            "category_guess": "duck",
+            "color_guess": "yellow",
+            "caption": "A small yellow duck standing on the checkered floor."
+          }
+        ]
+      },
+      "enemies_seen": [
+        {
+          "appearance": {
+            "shirt_color": "blue",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "purple",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "blue",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "blue",
+            "pants_color": "grey",
+            "skin_color": "green",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "blue",
+            "pants_color": "grey",
+            "skin_color": "green",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "purple",
+            "pants_color": "grey",
+            "skin_color": "green",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "blue",
+            "pants_color": "grey",
+            "skin_color": "yellow",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "yellow",
+            "pants_color": "blue",
+            "skin_color": "yellow",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "yellow",
+            "pants_color": "grey",
+            "skin_color": "yellow",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "yellow",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "green",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "purple",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        }
+      ]
+    },
+    "Pearl Vault": {
+      "wall_color": "denim",
+      "doors": {
+        "count": 1,
+        "exits": {
+          "0": "open->Vermilion  Libra…",
+          "90": "unknown",
+          "180": "unknown",
+          "270": "unknown"
+        }
+      },
+      "images": {
+        "count": 41,
+        "items": [
+          {
+            "category_guess": "ice cream",
+            "caption": "A close-up of a pink and white swirl ice cream cone.",
+            "colors": [
+              "pink",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "truck",
+            "caption": "A blue truck driving on a road with trees and a building in the background.",
+            "colors": [
+              "blue",
+              "white",
+              "green",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "food",
+            "caption": "A close-up of a pink, textured food item, possibly a fruit or vegetable.",
+            "colors": [
+              "pink",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "truck",
+            "caption": "A blue truck with a yellow bed.",
+            "colors": [
+              "blue",
+              "yellow",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "yarn",
+            "caption": "A close-up of a ball of pink yarn.",
+            "colors": [
+              "pink",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "trucks",
+            "caption": "Several blue trucks are parked in a row, with some yellow accents.",
+            "colors": [
+              "blue",
+              "yellow",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "seashell",
+            "caption": "A framed image of a seashell.",
+            "colors": [
+              "brown",
+              "white",
+              "pink"
+            ]
+          },
+          {
+            "category_guess": "car",
+            "caption": "A framed image of a blue car driving on a road.",
+            "colors": [
+              "blue",
+              "green",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "seashell",
+            "caption": "A close-up of a seashell.",
+            "colors": [
+              "brown",
+              "white",
+              "pink"
+            ]
+          },
+          {
+            "category_guess": "person",
+            "caption": "A person wearing a headscarf.",
+            "colors": [
+              "brown",
+              "pink",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "seashell",
+            "caption": "A pink and white seashell.",
+            "colors": [
+              "pink",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "truck",
+            "caption": "A blue truck driving down a street.",
+            "colors": [
+              "blue",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "seashell",
+            "caption": "A pink seashell with a small creature inside.",
+            "colors": [
+              "pink",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "tree",
+            "caption": "A green tree with a yellow trunk.",
+            "colors": [
+              "green",
+              "yellow",
+              "blue"
+            ]
+          },
+          {
+            "category_guess": "boat",
+            "caption": "A sailboat on the water with a cloudy sky.",
+            "colors": [
+              "blue",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "cityscape",
+            "caption": "A framed picture of a city at night.",
+            "colors": [
+              "blue",
+              "purple",
+              "yellow",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A framed picture of a natural landscape with a body of water and mountains.",
+            "colors": [
+              "blue",
+              "green",
+              "brown",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "sky",
+            "caption": "A painting of clouds and a blue sky.",
+            "colors": [
+              "blue",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "sky",
+            "caption": "A painting of a cloudy sky with a hint of mountains.",
+            "colors": [
+              "blue",
+              "white",
+              "grey",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A dark abstract image with a purple background and a green shape.",
+            "colors": [
+              "black",
+              "purple",
+              "green"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A square framed image with a green rectangle inside.",
+            "colors": [
+              "red",
+              "green",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A square frame with a red background and a green line.",
+            "colors": [
+              "red",
+              "green"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A square frame with a purple background and a black square inside.",
+            "colors": [
+              "purple",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A framed abstract image with a purple square in the center.",
+            "colors": [
+              "purple",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "portrait",
+            "caption": "A framed picture of a person's face.",
+            "colors": [
+              "black",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "portrait",
+            "caption": "A framed dark portrait on a reddish wall.",
+            "colors": [
+              "black",
+              "grey",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "painting",
+            "caption": "A framed abstract painting with purple and black colors.",
+            "colors": [
+              "purple",
+              "black",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "hallway",
+            "caption": "A black and white photo of a long, ornate hallway with arches.",
+            "colors": [
+              "black",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "painting",
+            "caption": "A framed painting.",
+            "colors": [
+              "black",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A framed abstract image with swirling pink and brown colors.",
+            "colors": [
+              "pink",
+              "brown",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "tree",
+            "caption": "A stylized green tree with a brown trunk against a blue sky.",
+            "colors": [
+              "green",
+              "brown",
+              "blue"
+            ]
+          },
+          {
+            "category_guess": "teeth",
+            "caption": "A close-up image of human teeth.",
+            "colors": [
+              "white",
+              "pink",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "shelves",
+            "caption": "A close-up of shelves filled with items.",
+            "colors": [
+              "brown",
+              "white",
+              "red"
+            ]
+          },
+          {
+            "category_guess": "car",
+            "caption": "A blue car parked on a street.",
+            "colors": [
+              "blue",
+              "grey",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "person",
+            "caption": "A person in ornate headdress and armor",
+            "colors": [
+              "pink",
+              "gold",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "people",
+            "caption": "A framed image of people in historical clothing.",
+            "colors": [
+              "tan",
+              "white",
+              "blue",
+              "red"
+            ]
+          },
+          {
+            "category_guess": "people",
+            "caption": "A person walking on a checkered floor.",
+            "colors": [
+              "grey",
+              "white",
+              "black",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "cityscape",
+            "caption": "A street scene with buildings and a car.",
+            "colors": [
+              "blue",
+              "white",
+              "grey",
+              "green"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A colorful landscape painting.",
+            "colors": [
+              "blue",
+              "green",
+              "yellow",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A framed picture of a dog.",
+            "colors": [
+              "brown",
+              "black",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "animal",
+            "caption": "A framed picture of an animal, possibly a dog or cat, looking to the side.",
+            "colors": [
+              "brown",
+              "black",
+              "white",
+              "grey"
+            ]
+          }
+        ]
+      },
+      "objects": {
+        "count": 9,
+        "items": [
+          {
+            "category_guess": "rubber duck",
+            "color_guess": "yellow",
+            "caption": "A small yellow rubber duck toy."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A small green tree."
+          },
+          {
+            "category_guess": "traffic cone",
+            "color_guess": "yellow",
+            "caption": "A yellow traffic cone on the floor."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "green",
+            "caption": "A green lamp with a tall, thin base."
+          },
+          {
+            "category_guess": "plant",
+            "color_guess": "green",
+            "caption": "Another small green potted plant."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A small, stylized tree with yellow leaves."
+          },
+          {
+            "category_guess": "ball",
+            "color_guess": "yellow",
+            "caption": "A yellow ball on the checkered floor."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "blue",
+            "caption": "A tall blue lamp with a purple top."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A stylized green tree with a brown trunk."
+          }
+        ]
+      },
+      "enemies_seen": [
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "yellow",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "green",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "yellow",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "yellow",
+            "pants_color": "grey",
+            "skin_color": "yellow",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "yellow",
+            "pants_color": "purple",
+            "skin_color": "yellow",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "blue",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "purple",
+            "pants_color": "blue",
+            "skin_color": "grey",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "purple",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "blue",
+            "skin_color": "green",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "green",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        }
+      ]
+    },
+    "Vermilion  Libra…": {
+      "wall_color": "teal",
+      "doors": {
+        "count": 1,
+        "exits": {
+          "0": "open->Ivory Gallery",
+          "90": "unknown",
+          "180": "unknown",
+          "270": "unknown"
+        }
+      },
+      "images": {
+        "count": 26,
+        "items": [
+          {
+            "category_guess": "landscape",
+            "caption": "A framed picture of a landscape with a body of water and trees.",
+            "colors": [
+              "blue",
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "landscape",
+            "caption": "A framed painting of a natural scene.",
+            "colors": [
+              "blue",
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "painting",
+            "caption": "A framed painting hangs on the far wall.",
+            "colors": [
+              "blue",
+              "brown",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "painting",
+            "caption": "A framed painting with abstract shapes and colors.",
+            "colors": [
+              "blue",
+              "brown",
+              "yellow"
+            ]
+          },
+          {
+            "category_guess": "painting",
+            "caption": "A framed painting of a landscape with a waterfall.",
+            "colors": [
+              "brown",
+              "green",
+              "blue"
+            ]
+          },
+          {
+            "category_guess": "animal",
+            "caption": "A framed picture of a brown animal, possibly a dog or a horse, in a natural setting.",
+            "colors": [
+              "brown",
+              "green",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "forest",
+            "caption": "A framed picture of a forest scene with a waterfall.",
+            "colors": [
+              "green",
+              "brown",
+              "blue"
+            ]
+          },
+          {
+            "category_guess": "tree",
+            "caption": "A framed picture of a tree with green leaves and a brown trunk.",
+            "colors": [
+              "green",
+              "brown",
+              "blue"
+            ]
+          },
+          {
+            "category_guess": "portrait",
+            "caption": "A framed picture that appears to be a portrait or a close-up of a face.",
+            "colors": [
+              "brown",
+              "beige",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "person",
+            "caption": "A framed photo of a person.",
+            "colors": [
+              "brown",
+              "tan",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "portrait",
+            "caption": "A framed portrait of a person with a pale face.",
+            "colors": [
+              "white",
+              "black",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "portrait",
+            "caption": "A framed portrait with a white background.",
+            "colors": [
+              "white",
+              "black",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A framed abstract painting with vertical lines and a central figure.",
+            "colors": [
+              "grey",
+              "black",
+              "white",
+              "blue"
+            ]
+          },
+          {
+            "category_guess": "people",
+            "caption": "Two people standing in front of a blurry background.",
+            "colors": [
+              "grey",
+              "white",
+              "blue"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A dog's face with its tongue out.",
+            "colors": [
+              "brown",
+              "black",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A framed photo of a dog looking to the right.",
+            "colors": [
+              "brown",
+              "white",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A framed abstract image with green and brown tones.",
+            "colors": [
+              "green",
+              "brown",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "animal",
+            "caption": "A framed image of an animal's face, possibly a dog.",
+            "colors": [
+              "black",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A framed picture of a dog.",
+            "colors": [
+              "brown",
+              "white",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "forest",
+            "caption": "A framed photo of a forest scene with a green object in the foreground.",
+            "colors": [
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "fruit",
+            "caption": "A bowl of fruit with a green apple prominent.",
+            "colors": [
+              "green",
+              "red",
+              "yellow",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "tree",
+            "caption": "A close-up of a tree trunk with green moss.",
+            "colors": [
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "tree",
+            "caption": "A close-up photo of tree bark and leaves.",
+            "colors": [
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "animal",
+            "caption": "A black and white photo of an animal's face.",
+            "colors": [
+              "black",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "bird",
+            "caption": "A close-up of a bird perched on a branch.",
+            "colors": [
+              "green",
+              "brown",
+              "blue"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A black and white dog looking to the side.",
+            "colors": [
+              "black",
+              "white",
+              "grey"
+            ]
+          }
+        ]
+      },
+      "objects": {
+        "count": 37,
+        "items": [
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A stylized tree with a brown trunk and green foliage."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "Another stylized tree with green polygonal leaves."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A small potted tree."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A stylized, low-polygon tree."
+          },
+          {
+            "category_guess": "cone",
+            "color_guess": "white",
+            "caption": "A small white traffic cone."
+          },
+          {
+            "category_guess": "table",
+            "color_guess": "yellow",
+            "caption": "A small yellow table with a green object on top."
+          },
+          {
+            "category_guess": "figure",
+            "color_guess": "red",
+            "caption": "A red and purple block figure with a grey head and orange feet."
+          },
+          {
+            "category_guess": "rubber duck",
+            "color_guess": "yellow",
+            "caption": "A small yellow rubber duck toy."
+          },
+          {
+            "category_guess": "office chair",
+            "color_guess": "black",
+            "caption": "A black office chair with a backrest and wheels."
+          },
+          {
+            "category_guess": "sign",
+            "color_guess": "grey",
+            "caption": "A grey signpost with a green rectangular panel."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A potted green plant."
+          },
+          {
+            "category_guess": "display",
+            "color_guess": "grey",
+            "caption": "A grey display stand with a green screen."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "grey",
+            "caption": "A tall, thin grey lamp with a green light."
+          },
+          {
+            "category_guess": "vase",
+            "color_guess": "white",
+            "caption": "A small white vase on the floor."
+          },
+          {
+            "category_guess": "chair",
+            "color_guess": "grey",
+            "caption": "A grey chair."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "white",
+            "caption": "A tall, slender lamp with a white shade."
+          },
+          {
+            "category_guess": "vase",
+            "color_guess": "grey",
+            "caption": "A grey vase with a narrow neck."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "yellow",
+            "caption": "A small yellow lamp on a stand."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "green",
+            "caption": "A green lamp post or light fixture."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "green",
+            "caption": "A green lamp on the floor."
+          },
+          {
+            "category_guess": "candle",
+            "color_guess": "white",
+            "caption": "A lit candle on a small stand."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A green, geometric tree-like object."
+          },
+          {
+            "category_guess": "traffic cone",
+            "color_guess": "orange",
+            "caption": "An orange traffic cone on the floor."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A green, blocky tree."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "brown",
+            "caption": "A small brown lamp with a light-colored shade."
+          },
+          {
+            "category_guess": "boat",
+            "color_guess": "white",
+            "caption": "A small white boat with a sail."
+          },
+          {
+            "category_guess": "chess piece",
+            "color_guess": "yellow",
+            "caption": "A yellow chess piece, likely a pawn."
+          },
+          {
+            "category_guess": "sailboat",
+            "color_guess": "white",
+            "caption": "A small white sailboat model."
+          },
+          {
+            "category_guess": "candle",
+            "color_guess": "white",
+            "caption": "A white candle with a flame on the floor."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "orange",
+            "caption": "A small orange lamp with a flame-like top."
+          },
+          {
+            "category_guess": "person",
+            "color_guess": "yellow",
+            "caption": "Two yellow figures that resemble people."
+          },
+          {
+            "category_guess": "person",
+            "color_guess": "yellow",
+            "caption": "A yellow, blocky character on the floor."
+          },
+          {
+            "category_guess": "chair",
+            "color_guess": "blue",
+            "caption": "A blue chair"
+          },
+          {
+            "category_guess": "chair",
+            "color_guess": "purple",
+            "caption": "A purple chair"
+          },
+          {
+            "category_guess": "figure",
+            "color_guess": "purple",
+            "caption": "A blocky purple figure with a red base."
+          },
+          {
+            "category_guess": "figure",
+            "color_guess": "grey",
+            "caption": "A blocky grey figure."
+          },
+          {
+            "category_guess": "figure",
+            "color_guess": "red",
+            "caption": "A red cylindrical figure."
+          }
+        ]
+      },
+      "enemies_seen": [
+        {
+          "appearance": {
+            "shirt_color": "purple",
+            "pants_color": "red",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "red",
+            "pants_color": "purple",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "purple",
+            "pants_color": "grey",
+            "skin_color": "yellow",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "purple",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "blue",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "blue",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "yellow",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        }
+      ]
+    },
+    "Ivory Gallery": {
+      "wall_color": "slate",
+      "doors": {
+        "count": 1,
+        "exits": {
+          "0": "unknown",
+          "90": "unknown",
+          "180": "open->Vermilion  Libra…",
+          "270": "unknown"
+        }
+      },
+      "images": {
+        "count": 24,
+        "items": [
+          {
+            "category_guess": "nature",
+            "caption": "A close-up of tree bark and leaves.",
+            "colors": [
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A portrait of a dog's face.",
+            "colors": [
+              "brown",
+              "white",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "bees",
+            "caption": "A framed photo of bees on honeycomb.",
+            "colors": [
+              "green",
+              "brown",
+              "yellow"
+            ]
+          },
+          {
+            "category_guess": "nature",
+            "caption": "A framed photo of a forest scene with a green leaf.",
+            "colors": [
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "people",
+            "caption": "Two people in a natural setting.",
+            "colors": [
+              "green",
+              "brown",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A black and white dog.",
+            "colors": [
+              "black",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "woman",
+            "caption": "A woman with blonde hair wearing a white top.",
+            "colors": [
+              "blonde",
+              "white",
+              "green",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "woman",
+            "caption": "A framed photo of a woman in a dress.",
+            "colors": [
+              "blue",
+              "green",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "person",
+            "caption": "A framed photo of a person in a light-colored outfit.",
+            "colors": [
+              "beige",
+              "brown",
+              "green"
+            ]
+          },
+          {
+            "category_guess": "people",
+            "caption": "Two people, one in a green outfit, standing near a grey pole.",
+            "colors": [
+              "blue",
+              "green",
+              "grey",
+              "tan"
+            ]
+          },
+          {
+            "category_guess": "person",
+            "caption": "A person's torso and legs, possibly in a green outfit.",
+            "colors": [
+              "blue",
+              "green",
+              "grey",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A framed photo of a dog's head.",
+            "colors": [
+              "black",
+              "white",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A framed abstract image with green and brown elements.",
+            "colors": [
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A close-up of a dog's face with dark eyes and a black nose.",
+            "colors": [
+              "white",
+              "black",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "animal",
+            "caption": "A framed image of an animal, possibly a bird or a small mammal, with green and brown tones.",
+            "colors": [
+              "green",
+              "brown",
+              "grey",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "abstract",
+            "caption": "A framed abstract image with grey and blue tones.",
+            "colors": [
+              "grey",
+              "blue",
+              "black"
+            ]
+          },
+          {
+            "category_guess": "tree",
+            "caption": "A painting of a tree with green leaves.",
+            "colors": [
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "tree",
+            "caption": "A framed photo of a tree trunk with moss.",
+            "colors": [
+              "green",
+              "brown",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "bird",
+            "caption": "A close-up of a bird with blue and green feathers perched on a branch.",
+            "colors": [
+              "green",
+              "blue",
+              "brown"
+            ]
+          },
+          {
+            "category_guess": "portrait",
+            "caption": "A framed portrait of a person.",
+            "colors": [
+              "brown",
+              "black",
+              "white"
+            ]
+          },
+          {
+            "category_guess": "fox",
+            "caption": "A white fox sits in a snowy landscape.",
+            "colors": [
+              "white",
+              "blue",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "building",
+            "caption": "A black and white photo of a tall, ornate building, possibly a cathedral or monument, with intricate details and spires.",
+            "colors": [
+              "white",
+              "black",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "dog",
+            "caption": "A framed picture of a dog, possibly a husky, in a snowy landscape.",
+            "colors": [
+              "blue",
+              "white",
+              "grey"
+            ]
+          },
+          {
+            "category_guess": "fox",
+            "caption": "A white fox sitting in the snow.",
+            "colors": [
+              "white",
+              "blue",
+              "grey"
+            ]
+          }
+        ]
+      },
+      "objects": {
+        "count": 9,
+        "items": [
+          {
+            "category_guess": "rubber duck",
+            "color_guess": "yellow",
+            "caption": "A yellow rubber duck on the floor."
+          },
+          {
+            "category_guess": "traffic cone",
+            "color_guess": "orange",
+            "caption": "An orange traffic cone on the floor."
+          },
+          {
+            "category_guess": "broom",
+            "color_guess": "brown",
+            "caption": "A broom leaning against the wall."
+          },
+          {
+            "category_guess": "lamp",
+            "color_guess": "orange",
+            "caption": "A floor lamp with an orange base and a white shade."
+          },
+          {
+            "category_guess": "easel",
+            "color_guess": "brown",
+            "caption": "A small brown easel with a white canvas."
+          },
+          {
+            "category_guess": "easel",
+            "color_guess": "brown",
+            "caption": "A brown easel with a green square on it."
+          },
+          {
+            "category_guess": "traffic cone",
+            "color_guess": "orange",
+            "caption": "A traffic cone with white stripes."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A stylized tree with green foliage and a brown trunk."
+          },
+          {
+            "category_guess": "tree",
+            "color_guess": "green",
+            "caption": "A small tree with green leaves."
+          }
+        ]
+      },
+      "enemies_seen": [
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "tall"
+          },
+          "outcome": "seen"
+        },
+        {
+          "appearance": {
+            "shirt_color": "green",
+            "pants_color": "grey",
+            "skin_color": "grey",
+            "body_shape": "short"
+          },
+          "outcome": "seen"
+        }
+      ]
+    }
+  },
+  "key": {
+    "found": false,
+    "room_found_in": null
+  },
+  "door": {
+    "touched": false,
+    "unlocked": false
+  },
+  "enemies_killed_total": 0
+}
