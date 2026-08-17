@@ -44,7 +44,7 @@ _BANNER_FONT_SIZE = 28
 _ALPHABET = (
     string.ascii_letters
     + string.digits
-    + " .,:;'\"!?()-/°[]—·"
+    + " .,:;'\"!?()-/°[]—·…"
 )
 
 _INK_THRESHOLD = 40  # 배경(검정/진남색) 대비 "글자 잉크"로 볼 밝기 임계값
@@ -100,17 +100,19 @@ def _score(crop_mask: np.ndarray, ref_mask: np.ndarray) -> float:
     return float((crop_mask == ref_mask).mean())
 
 
-def _read_line(ink: np.ndarray, glyphs: _GlyphSet, x_start: int, x_end: int) -> str:
+def _read_line(ink: np.ndarray, glyphs: _GlyphSet, x_start: int, x_end: int,
+               y_off: int) -> str:
     """ink: (height, width) bool 배열(잉크=True). [x_start, x_end) 구간을
     왼쪽부터 그리디하게 한 글자씩 읽어 문자열로 복원한다.
 
-    작은 정렬 오차(글자 하나하나의 advance 합이 실제 렌더와 미세하게
-    어긋나는 경우)를 흡수하기 위해, 매 스텝마다 커서 위치를 -2..+2px
-    범위에서 같이 탐색해 가장 잘 맞는 (글자, 시작위치) 조합을 고른다.
+    y_off: 참조 글리프(높이 glyphs.height, 알파벳 전체의 잉크 상단에 맞춰
+    잘라둔 것)를 ink의 몇 번째 행부터 맞춰 비교할지. 호출자가 "이 ink에서
+    실제 글자가 시작하는 맨 윗 행"을 넘겨줘야 한다(가운데 정렬 추정이
+    아니라 실측값). 작은 정렬 오차를 흡수하기 위해, 매 스텝마다 커서
+    위치를 -2..+2px 범위에서 같이 탐색해 가장 잘 맞는 (글자, 시작위치)
+    조합을 고른다.
     """
-    h = ink.shape[0]
     gh = glyphs.height
-    y_off = max(0, (h - gh) // 2)
     out = []
     cursor = x_start
     stall_guard = 0
@@ -121,16 +123,20 @@ def _read_line(ink: np.ndarray, glyphs: _GlyphSet, x_start: int, x_end: int) -> 
             c0 = cursor + dx
             if c0 < 0:
                 continue
-            for ch, ref in zip(glyphs.chars, glyphs.masks):
-                w = ref.shape[1]
-                if c0 + w > ink.shape[1]:
+            for dy in (0, -1, 1):
+                yy = y_off + dy
+                if yy < 0:
                     continue
-                crop = ink[y_off:y_off + gh, c0:c0 + w]
-                if crop.shape != ref.shape:
-                    continue
-                s = _score(crop, ref)
-                if best is None or s > best[0]:
-                    best = (s, ch, w, c0)
+                for ch, ref in zip(glyphs.chars, glyphs.masks):
+                    w = ref.shape[1]
+                    if c0 + w > ink.shape[1] or yy + gh > ink.shape[0]:
+                        continue
+                    crop = ink[yy:yy + gh, c0:c0 + w]
+                    if crop.shape != ref.shape:
+                        continue
+                    s = _score(crop, ref)
+                    if best is None or s > best[0]:
+                        best = (s, ch, w, c0)
         if best is None or best[0] < _MATCH_MIN_SCORE:
             break
         score, ch, w, actual_cursor = best
@@ -157,7 +163,10 @@ _HUD_BAR_HEIGHT = 28  # hud.py::_BAR_HEIGHT와 동일 (실측 프레임으로 �
 
 _HUD_RE = re.compile(
     r"^(?P<room>.*?)\s*[·.]\s*T-(?P<secs>\d+)s\s*[·.]\s*HP\s*(?P<hp>\d+)/(?P<hpmax>\d+)"
-    r"\s*[·.]\s*dir\s*(?P<heading>\d+)°(?:\s*[·.]\s*\[KEY\])?$"
+    r"\s*[·.]\s*dir\s*(?P<heading>\d+).?(?:\s*[·.]\s*\[KEY\])?$"
+    # 마지막 '.?'는 도(°) 기호 자리 — 16px 크기에서 어퍼스트로피(')와
+    # 시각적으로 거의 구분이 안 돼 OCR이 종종 다르게 읽는다. 어차피
+    # 필요한 건 heading 숫자뿐이라 기호 자체는 검증하지 않는다.
 )
 
 
@@ -182,8 +191,10 @@ def read_hud(frame: np.ndarray) -> HudReading:
     if bounds is None:
         return HudReading(ok=False)
     x0, x1 = bounds
+    ink_rows = np.where(ink.any(axis=1))[0]
+    y_off = int(ink_rows.min())
     glyphs = _build_glyph_set(_HUD_FONT_SIZE)
-    text = _read_line(ink, glyphs, x0, x1)
+    text = _read_line(ink, glyphs, x0, x1, y_off)
     m = _HUD_RE.match(text)
     if not m:
         return HudReading(ok=False, raw_text=text)
@@ -269,7 +280,7 @@ def read_hint_text(frame: np.ndarray) -> str:
         if bounds is None:
             continue
         x0, x1 = bounds
-        text = _read_line(row_ink, glyphs, x0, x1)
+        text = _read_line(row_ink, glyphs, x0, x1, y_off=0)
         if text:
             lines.append(text)
 

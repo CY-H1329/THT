@@ -16,7 +16,6 @@ from pathlib import Path
 # agent/ 패키지 자체(평가 시 `from agent import Agent`로 로드)는 이 문제와 무관.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import numpy as np
 from PIL import Image
 
 from memory_fps_env.env import Action, MemoryFPSEnv
@@ -25,23 +24,25 @@ OUT_DIR = Path(__file__).parent / "debug_frames"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def dump(seed: int, n_steps: int = 40) -> None:
+def dump(seed: int, n_steps: int = 160) -> None:
+    """오래(160스텝) 전진 위주로 돌아다니며 방 전환/복도 프레임까지
+    잡아본다. random_agent.py처럼 전진 비중을 높게 두고 가끔 회전을
+    섞어서, 실제로 문을 통과할 확률을 높인다. 시드로 재현 가능.
+    """
+    import random
+    rng = random.Random(seed)
     env = MemoryFPSEnv(seed=seed)
     obs, info = env.reset()
     Image.fromarray(obs).save(OUT_DIR / f"seed{seed}_step000.png")
-    print(f"seed={seed} step=0 phase={info['phase']} shape={obs.shape} dtype={obs.dtype}")
 
-    # 방을 몇 개 지나가며 다양한 HUD 상태(방이름 변화, 헤딩 변화)를 확보.
-    actions = (
-        [Action.MOVE_FORWARD] * 8
-        + [Action.TURN_RIGHT] * 6
-        + [Action.MOVE_FORWARD] * 8
-        + [Action.TURN_LEFT] * 4
-        + [Action.MOVE_FORWARD] * 8
-    )
-    for i, a in enumerate(actions[:n_steps], start=1):
+    every = 10  # every 스텝마다 한 장씩 저장
+    for i in range(1, n_steps + 1):
+        a = rng.choices(
+            [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT],
+            weights=[6, 1, 1],
+        )[0]
         obs, _r, term, trunc, info = env.step(int(a))
-        if i in (5, 10, 15, 20, 25, 30):
+        if i % every == 0:
             Image.fromarray(obs).save(OUT_DIR / f"seed{seed}_step{i:03d}.png")
         if term or trunc:
             print(f"seed={seed} terminated at step {i}, phase={info['phase']}")
@@ -49,17 +50,10 @@ def dump(seed: int, n_steps: int = 40) -> None:
     else:
         print(f"seed={seed} ran {n_steps} steps without terminating")
 
-    # HUD 바 픽셀 분석: y=0..31 범위에서 각 row의 0이 아닌(텍스트) 픽셀 수.
-    bar = obs[:32, :, :]
-    for y in range(32):
-        nonzero = int(np.count_nonzero(bar[y].sum(axis=-1) > 30))
-        if nonzero > 0:
-            print(f"  row y={y}: {nonzero} non-black px (first/last x with text)")
-
     env.close()
 
 
 if __name__ == "__main__":
-    for seed in (0, 42):
+    for seed in (0, 1, 7, 42, 99):
         dump(seed)
     print("done ->", OUT_DIR)
