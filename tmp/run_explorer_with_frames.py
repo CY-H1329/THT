@@ -30,6 +30,8 @@ last_hp = None
 term = trunc = False
 i = 0
 for i in range(1, MAX_STEPS + 1):
+    state_before = policy.state
+    phase_before = policy.flee_phase
     action = policy.step(obs)
     obs, _r, term, trunc, _info = env.step(action)
     hud = read_hud(obs) if not (term or trunc) else None
@@ -42,6 +44,13 @@ for i in range(1, MAX_STEPS + 1):
         if last_hp is not None and hud.hp < last_hp:
             Image.fromarray(obs).save(OUT_DIR / f"run_seed{SEED}_step{i:04d}_hit_hp{hud.hp}.png")
         last_hp = hud.hp
+
+    # FLEE 상태 진행 전체를 프레임 단위로 저장 (retreat/turnaround/strike 시퀀스 검증용)
+    if state_before == "FLEE" or policy.state == "FLEE":
+        phase = phase_before or policy.flee_phase or "none"
+        Image.fromarray(obs).save(
+            OUT_DIR / f"run_seed{SEED}_step{i:04d}_FLEE_{phase}_hp{hud.hp}.png"
+        )
 
     if i % 50 == 0:
         Image.fromarray(obs).save(OUT_DIR / f"run_seed{SEED}_step{i:04d}.png")

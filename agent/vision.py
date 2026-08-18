@@ -163,3 +163,36 @@ def something_in_front(frame: np.ndarray, room_wall_color: Optional[str]) -> boo
     if room_wall_color is None:
         return name is None  # 방 색을 아직 모르면, 팔레트에 안 맞는 것만 후보로
     return name != room_wall_color
+
+
+def enemy_bearing(frame: np.ndarray, room_wall_color: Optional[str]) -> Optional[str]:
+    """something_in_front를 화면 왼쪽/가운데/오른쪽 3등분으로 나눠서, 벽
+    색이 아닌(=뭔가 있는) 부분이 어느 쪽인지 반환한다. "center"|"left"|
+    "right"|None(아무것도 안 보임). VLM 없이 매 스텝 실시간으로 전투 중
+    조준을 미세 조정하는 용도 — 정확히 뭔지는 몰라도 어느 쪽에 뭔가
+    있는지는 알 수 있다.
+    """
+    h, w = frame.shape[0], frame.shape[1]
+    y0, y1 = int(h * 0.35), int(h * 0.75)
+    bands = {"left": (0.05, 0.35), "center": (0.35, 0.65), "right": (0.65, 0.95)}
+    found = {}
+    for label, (fx0, fx1) in bands.items():
+        x0, x1 = int(w * fx0), int(w * fx1)
+        crop = frame[y0:y1, x0:x1, :]
+        small = crop[::3, ::3, :].reshape(-1, 3)
+        if small.size == 0:
+            continue
+        colors, counts = np.unique(small, axis=0, return_counts=True)
+        mode_rgb = tuple(int(c) for c in colors[counts.argmax()])
+        name = nearest_color_name(mode_rgb)
+        matches_wall = (name == room_wall_color) if room_wall_color else (name is not None)
+        found[label] = not matches_wall
+
+    # 가운데를 우선시(이미 조준된 상태일 확률이 높음), 그다음 좌/우.
+    if found.get("center"):
+        return "center"
+    if found.get("left"):
+        return "left"
+    if found.get("right"):
+        return "right"
+    return None

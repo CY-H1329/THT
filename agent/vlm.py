@@ -292,3 +292,163 @@ def update_room_db(
     except (urllib.error.URLError, TimeoutError, KeyError, ValueError,
             json.JSONDecodeError) as e:
         return VlmResult(ok=False, error=str(e))
+
+
+# --- 전투 중 조준(strike 단계 전용) -----------------------------------------
+# CV 색상 규칙(agent.vision.enemy_bearing)은 "저장된 방 벽색과 다른 픽셀"로
+# 적을 추론하는데, 조명에 따라 같은 벽도 최대 0.65배까지 어둡게 렌더되는
+# 문제 때문에(dev_log.md) 아무것도 없는 벽을 적으로 오판하는 게 실측으로
+# 확인됐다 — 그래서 "벽이 아닌 것 찾기"가 아니라 실제로 이미지를 보고
+# 적(정해진 색 팔레트의 6박스 humanoid, held-out 아님)을 직접 식별하는
+# 방식으로 바꾼다. 실측: 이미지 1장 VLM 호출은 평균 ~2초(act() 5초 예산
+# 안에 들어감). strike 단계(최대 _FLEE_STRIKE_MAX_TICKS틱) 동안 매 틱
+# 호출해서 그 프레임 기준으로 공격/좌회전/우회전을 바로 결정한다.
+_LOCATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "enemy_visible": {"type": "boolean"},
+        "bearing": {"type": ["string", "null"], "enum": ["left", "center", "right", None]},
+        "close_enough_to_attack": {"type": "boolean"},
+    },
+    "required": ["enemy_visible", "bearing", "close_enough_to_attack"],
+    "additionalProperties": False,
+}
+
+_LOCATE_PROMPT = (
+    "One frame from a first-person 3D game (HUD cropped out). The player "
+    "is currently fighting a nearby blocky Minecraft-style humanoid "
+    "monster (6 boxes: head/torso/2 arms/2 legs, a face texture, a "
+    "colored shirt torso and colored pants legs), which may or may not be "
+    "visible in this exact frame. Do not confuse a wall, door, or 3D prop "
+    "(barrel/cone/duckie/chair/tree) for the monster. Is the monster "
+    "visible? If so: is it on the left, center, or right side of the "
+    "frame (center = roughly the middle third, good enough to attack "
+    "straight ahead)? And does it look close enough to melee (large in "
+    "frame, within a couple of meters) rather than far away across the "
+    "room? Answer only the JSON fields, no extra text."
+)
+
+
+def locate_enemy(frame: np.ndarray, api_key: Optional[str] = None,
+                  timeout: float = 3.0) -> VlmResult:
+    """지금 프레임에 적이 보이는지, 대략 어느 쪽인지 한 번만 물어본다.
+    전투 시작 시 초기 방향을 잡는 용도(자세한 설계는 위 주석 참고).
+    실패 시 예외 없이 VlmResult(ok=False) — 호출자는 CV 기반 조준으로
+    바로 넘어가면 된다.
+    """
+    key = api_key or get_api_key()
+    if not key:
+        return VlmResult(ok=False, error="no_api_key")
+
+    payload = {
+        "model": VLM_MODEL,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": _LOCATE_PROMPT},
+                {"type": "image_url", "image_url": {"url": _encode_jpeg(frame)}},
+            ],
+        }],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "locate_enemy", "strict": True, "schema": _LOCATE_SCHEMA},
+        },
+        "temperature": 0,
+    }
+    req = urllib.request.Request(
+        _API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CONTEXT) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        data = json.loads(body["choices"][0]["message"]["content"])
+        usage = body.get("usage", {})
+        cost = (
+            usage.get("prompt_tokens", 0) * _PRICE_PROMPT_PER_TOKEN
+            + usage.get("completion_tokens", 0) * _PRICE_COMPLETION_PER_TOKEN
+        )
+        return VlmResult(ok=True, data=data, cost_usd=cost)
+    except (urllib.error.URLError, TimeoutError, KeyError, ValueError,
+            json.JSONDecodeError) as e:
+        return VlmResult(ok=False, error=str(e))
+
+
+# --- 막힌 방향 최후 확인(길찾기 안전망) --------------------------------
+# agent.explorer의 물리 충돌 확인(is_blocked)만으로 특정 방향을 "문 없음"
+# 으로 포기하기 직전, 딱 한 번만 VLM에게 "이거 진짜 벽이야, 문이야?"를
+# 물어본다(사용자 지시). 방마다 후보 방향 하나 포기할 때 최대 1회만
+# 부르므로 왕복 지연(~2초)이 누적되지 않는다.
+_DOOR_CHECK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "door_or_opening_visible": {"type": "boolean"},
+        "bearing": {"type": ["string", "null"], "enum": ["left", "center", "right", None]},
+    },
+    "required": ["door_or_opening_visible", "bearing"],
+    "additionalProperties": False,
+}
+
+_DOOR_CHECK_PROMPT = (
+    "One frame from a first-person 3D game (HUD cropped out). The player "
+    "has been trying to walk toward what might be a doorway/passage to "
+    "another room, but kept failing to actually pass through. Look "
+    "carefully: is there an actual door, open doorway, or passage to "
+    "another room visible anywhere in this image? A flat picture/photo "
+    "frame hanging on a wall, or a plain wall, does NOT count as a door "
+    "or opening -- only an actual gap/passage/doorway leading further "
+    "does. If a door/opening is visible, is it on the left, center, or "
+    "right side of the frame? Answer only the JSON fields, no extra text."
+)
+
+
+def locate_door(frame: np.ndarray, api_key: Optional[str] = None,
+                 timeout: float = 3.0) -> VlmResult:
+    """이 방향을 "문 없음"으로 포기하기 직전 마지막으로 한 번 확인.
+
+    실측으로 확인된 문제(dev_log.md): 벽에 걸린 그림을 문으로 착각하고
+    물리적으로 못 지나가는 걸 감지하는 안전망은 있지만, 반대로 "저기 문이
+    있는데 통로가 좁아서 계속 부딪히는 것"과 "그냥 벽/그림이라 문이 아예
+    없는 것"을 구분은 못 한다. 실패 시 예외 없이 VlmResult(ok=False) —
+    호출자는 그냥 벽으로 마킹하고 다음 후보로 넘어가면 된다.
+    """
+    key = api_key or get_api_key()
+    if not key:
+        return VlmResult(ok=False, error="no_api_key")
+
+    payload = {
+        "model": VLM_MODEL,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": _DOOR_CHECK_PROMPT},
+                {"type": "image_url", "image_url": {"url": _encode_jpeg(frame)}},
+            ],
+        }],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "locate_door", "strict": True, "schema": _DOOR_CHECK_SCHEMA},
+        },
+        "temperature": 0,
+    }
+    req = urllib.request.Request(
+        _API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CONTEXT) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        data = json.loads(body["choices"][0]["message"]["content"])
+        usage = body.get("usage", {})
+        cost = (
+            usage.get("prompt_tokens", 0) * _PRICE_PROMPT_PER_TOKEN
+            + usage.get("completion_tokens", 0) * _PRICE_COMPLETION_PER_TOKEN
+        )
+        return VlmResult(ok=True, data=data, cost_usd=cost)
+    except (urllib.error.URLError, TimeoutError, KeyError, ValueError,
+            json.JSONDecodeError) as e:
+        return VlmResult(ok=False, error=str(e))

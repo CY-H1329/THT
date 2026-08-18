@@ -57,6 +57,7 @@ class _GlyphSet:
     chars: str
     masks: list  # list[np.ndarray[bool]], 문자별 잉크 마스크 (height, width)
     height: int
+    width_groups: dict  # width -> (chars_str, stacked_masks (n, height, width) bool)
 
 
 @lru_cache(maxsize=4)
@@ -90,14 +91,25 @@ def _build_glyph_set(size: int) -> _GlyphSet:
         x0, x1 = int(round(xs[i])), max(int(round(xs[i])) + 1, int(round(xs[i + 1])))
         glyph = arr[y0:y1, x0:x1]
         masks.append(glyph > _INK_THRESHOLD)
-    return _GlyphSet(font=font, chars=_ALPHABET, masks=masks, height=y1 - y0)
 
-
-def _score(crop_mask: np.ndarray, ref_mask: np.ndarray) -> float:
-    """crop_mask와 ref_mask(둘 다 bool, 같은 shape로 이미 맞춰짐)의 유사도."""
-    if crop_mask.size == 0:
-        return 0.0
-    return float((crop_mask == ref_mask).mean())
+    # 너비별로 묶어서 참조 마스크를 (n, h, w) 배열로 쌓아둔다 — _read_line이
+    # 문자 하나하나를 파이썬 루프로 개별 비교하는 대신, 같은 너비의 문자
+    # 묶음을 numpy로 한 번에 비교하게 하기 위함. 실측: 글자당 ~1200번의
+    # 개별 numpy 호출(전체 알파벳 x dx x dy) 때문에 read_hud 한 번에
+    # 143ms가 걸렸는데(dev_log.md), 이 배치 비교로 <10ms대로 떨어진다.
+    # 묶음 안에서의 동점 처리(먼저 나온 문자가 이김)는 알파벳 등장 순서를
+    # 그대로 보존해서 기존 매칭 결과와 완전히 동일하게 만든다.
+    groups: dict = {}
+    for ch, m in zip(_ALPHABET, masks):
+        groups.setdefault(m.shape[1], ([], []))
+        groups[m.shape[1]][0].append(ch)
+        groups[m.shape[1]][1].append(m)
+    width_groups = {
+        w: ("".join(chs), np.stack(ms))
+        for w, (chs, ms) in groups.items()
+    }
+    return _GlyphSet(font=font, chars=_ALPHABET, masks=masks, height=y1 - y0,
+                      width_groups=width_groups)
 
 
 def _read_line(ink: np.ndarray, glyphs: _GlyphSet, x_start: int, x_end: int,
@@ -125,18 +137,23 @@ def _read_line(ink: np.ndarray, glyphs: _GlyphSet, x_start: int, x_end: int,
                 continue
             for dy in (0, -1, 1):
                 yy = y_off + dy
-                if yy < 0:
+                if yy < 0 or yy + gh > ink.shape[0]:
                     continue
-                for ch, ref in zip(glyphs.chars, glyphs.masks):
-                    w = ref.shape[1]
-                    if c0 + w > ink.shape[1] or yy + gh > ink.shape[0]:
+                # 같은 너비의 문자들을 (n,h,w) 배열로 한 번에 비교 —
+                # 문자 하나하나 개별 numpy 호출하는 것보다 훨씬 빠르다
+                # (위 _GlyphSet.width_groups 주석 참고). 동점 처리 순서는
+                # 알파벳 등장 순서와 동일하게 보존됨.
+                for w, (chs, stacked) in glyphs.width_groups.items():
+                    if c0 + w > ink.shape[1]:
                         continue
                     crop = ink[yy:yy + gh, c0:c0 + w]
-                    if crop.shape != ref.shape:
+                    if crop.shape[0] != gh or crop.shape[1] != w:
                         continue
-                    s = _score(crop, ref)
+                    scores = (stacked == crop[None, :, :]).mean(axis=(1, 2))
+                    idx = int(scores.argmax())
+                    s = float(scores[idx])
                     if best is None or s > best[0]:
-                        best = (s, ch, w, c0)
+                        best = (s, chs[idx], w, c0)
         if best is None or best[0] < _MATCH_MIN_SCORE:
             break
         score, ch, w, actual_cursor = best
