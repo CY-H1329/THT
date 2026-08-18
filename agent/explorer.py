@@ -674,7 +674,8 @@ class Explorer:
     def _route_to_frontier(self, include_unverified: bool) -> Optional[str]:
         """가장 가까운 '할 일 남은 방'으로 가는 첫 이동 방향."""
         best = None
-        for cell in self.map.frontier_rooms(include_unverified=include_unverified):
+        for cell in self.map.frontier_rooms(include_unverified=include_unverified,
+                                            usable=self._usable_dirs):
             if cell == self.cur_cell:
                 continue
             path = self.map.route(self.cur_cell, cell)
@@ -946,7 +947,7 @@ class Explorer:
                 self._begin_scan()           # 다시 돌아본 방은 새로 스캔
                 return TURN_LEFT
         # 새로 할 일이 생겼으면 탐색으로 복귀
-        if self.map.frontier_rooms():
+        if self.map.frontier_rooms(usable=self._usable_dirs):
             return self._choose_goal()
         # 체력에 여유가 있으면 스캔으로만 벽이라 본 방향을 몸으로 확인한다.
         # 여기서 문이 나오면 지도가 통째로 늘어난다.

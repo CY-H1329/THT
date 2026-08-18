@@ -264,6 +264,46 @@ proportional scoring, and the stationary-combat budget.
   hint text, HP events) is a scaffold for the memory layer, not a memory
   layer.
 
+## The premature-parking bug
+
+A watched run of seed 7 ended with the agent spinning in place in the third
+room while the episode clock ran. It had decided it was finished. Dumping its
+map at that moment:
+
+```
+Sable Vestibule (0,0)  E=door  S=wall  W=door   N=door
+Vermilion Galle (1,0)  E=door  S=wall  W=door   N=door
+Russet Wing     (2,0)  E=locked S=wall W=door   N=wall
+```
+
+Three of those doors — Sable W, Sable N, Vermilion N — lead to cells that had
+never been visited. Yet `frontier_rooms()` returned `[]`, so `_choose_goal`
+fell through to `_park_pick()` and switched to sentry mode with two thirds of
+the world unseen.
+
+The cause was that "has work left" was defined as *unscanned, or has a wall of
+unknown state*. A room that is fully scanned with all four walls classified
+failed both tests — even when one of its doors opened onto a cell that was
+never entered. Those cells are not in `self.rooms`, so iterating the map could
+never reach them either. The one place that did check for a door to an
+unvisited neighbour was step 1 of `_choose_goal`, which only looks at the
+**current** room; once the agent walked away, that door became invisible to
+the planner forever.
+
+`frontier_rooms()` now also counts a room with an open door onto an unvisited
+or unscanned cell, and takes the explorer's blacklist filter so a door that
+repeatedly failed to traverse cannot keep re-attracting the planner.
+
+Effect over ten public seeds (40 s each): rooms visited **50 → 66**, enemies
+killed 29 → 35. Deaths rose 2 → 5, which is the direct consequence of no
+longer standing in a safe corner: the agent now spends the second half of the
+episode moving through contested rooms. Two of the five deaths (seeds 1 and
+42) happened after covering 7/9 and 8/9 rooms and cost almost nothing; two
+(seeds 0 and 99) were early and did cost coverage. Since the README grades
+what you can answer rather than survival, more total observation is the right
+trade — but the early deaths are the strongest argument for the flee-at-low-HP
+step below.
+
 ## Next steps, in the order I would do them
 
 1. **Cut standing time.** Scan while approaching the room centre rather than

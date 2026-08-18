@@ -415,17 +415,46 @@ class WorldMap:
                 q.append(nxt)
         return None
 
-    def frontier_rooms(self, include_unverified: bool = False) -> List[Tuple[int, int]]:
-        """아직 할 일이 남은 방들: 미스캔이거나, 상태 미상인 벽이 있는 방.
+    def leads_to_unexplored(self, cell: Tuple[int, int], direction: str) -> bool:
+        """그 문 너머가 아직 안 가봤거나 안 훑은 방인가."""
+        dgx, dgz = DIR_DELTA[direction]
+        nb = self.rooms.get((cell[0] + dgx, cell[1] + dgz))
+        return nb is None or not nb.scanned
+
+    def frontier_rooms(self, include_unverified: bool = False,
+                       usable=None) -> List[Tuple[int, int]]:
+        """아직 할 일이 남은 방들.
+
+        세 가지가 '할 일'이다:
+
+        1. 아직 안 훑은 방,
+        2. 상태 미상인 벽이 남은 방,
+        3. **미방문 셀로 열린 문이 있는 방.**
+
+        3번이 빠져 있었다. 방 자체는 다 훑었고 네 벽의 상태도 다 알지만
+        그 중 한 문 너머를 안 가본 경우, 그 방은 프런티어로 안 잡혔다.
+        지도에 없는 셀은 self.rooms에 없으니 순회 대상도 아니어서, 어느
+        쪽으로도 걸리지 않고 사라진 것이다. 그 결과 방 3개만 훑은 상태에서
+        미방문 문 3개를 남겨두고 "할 일 없음"으로 판단해 보초 자세로
+        들어갔다(실측 시드 7). _choose_goal의 1순위는 **현재 방**의 문만
+        보기 때문에, 다른 방의 미방문 문은 오직 여기서만 발견된다.
 
         include_unverified=True면 "스캔으로만 벽이라 판정한" 방향이 남은
         방까지 포함한다(탐색이 끝난 뒤 재확인용).
+
+        usable: 방 → 쓸 수 있는 문 방향 목록. 통과에 실패해 블랙리스트에
+        오른 문을 프런티어 근거로 삼지 않도록 호출 측이 넘긴다.
         """
         out = []
         for cell, room in self.rooms.items():
             if not room.scanned or room.unknown_dirs():
                 out.append(cell)
-            elif include_unverified and room.unverified_walls():
+                continue
+            dirs = room.open_dirs() if usable is None else usable(room)
+            if any(self.leads_to_unexplored(cell, d) for d in dirs):
+                out.append(cell)
+                continue
+            if include_unverified and room.unverified_walls():
                 out.append(cell)
         return out
 
