@@ -122,11 +122,15 @@ _SIDESTEP_CONE_HALF_DEG = 8.0
 _SIDESTEP_MAX_PROBE_DEG = 35.0  # FOV_X_DEG(~75)의 절반 안쪽만 신뢰
 
 _TURN_TOLERANCE = 7        # 목표 방향과 이 각도 이내면 "정렬됨"
-_RECOVER_MAX_ATTEMPTS = 8  # 이만큼 회전해도 계속 막히면 "이 방향엔 문 없음"
+_RECOVER_MAX_ATTEMPTS = 3  # 이만큼 회전해도 계속 막히면 "이 방향엔 문 없음"
+# 문/벽은 항상 0/90/180/270 카디널에만 존재하므로, 15도 단위 미세조정을
+# 오래 붙잡고 있을 이유가 없다 — 몇 번만 시도해보고 안 되면 바로 다음
+# 카디널 후보로 넘어간다(실측 피드백: seed 0에서 Pearl Vault/Ebon Annex
+# 에서 한 방향에 너무 오래 매달려 제자리서 도는 것처럼 보임, dev_log.md).
 # 중간에 성공적 전진이 껴서 recover_attempts가 리셋되더라도, "이 목표
 # 헤딩에서 180도-포기(구석 몰림)를 통째로 몇 번 겪었는지"는 별도로 세서
 # 무한히 방을 맴도는 걸 막는다(실측으로 발견, dev_log.md).
-_MAX_CORNERED_PER_TARGET = 3
+_MAX_CORNERED_PER_TARGET = 1
 # RECENTER: 이 이상 재면 벽이 아니라 문/개방부로 보고(그 방향 거리는
 # 못 믿음) 반대쪽 벽만으로 중앙을 추정한다. 실측(ground truth로 확인,
 # dev_log.md): 방이 10x10이라 입구 바로 앞에서 정면 벽까지가 이미 9.9m
@@ -310,9 +314,21 @@ class ExplorerPolicy:
             self._hud_cache_key = bar_key
         return self._hud_cache_value
 
+    @property
+    def current_room(self):
+        """지금까지 확인된 가장 최근 방 이름(canonicalized). agent.py가
+        SURVEY 중 프레임을 어느 방에 버퍼링할지 정할 때 쓴다."""
+        return self._stuck_last_room
+
     # --- 메인 진입점 ------------------------------------------------
     def step(self, obs):
         hud = self._read_hud_cached(obs)
+
+        # QA용 영구 플래그: hud.has_key는 문을 여는 순간 다시 꺼지므로
+        # "열쇠를 찾은 적이 있는지"는 여기서 한 번 True가 되면 계속 True로
+        # 남긴다(memory.py::SceneGraph.key_found 참고).
+        if hud.ok and hud.has_key:
+            self.scene.key_found = True
 
         # 정체 감지용 보조 신호: 같은 방에 계속 머물러 있는지(=방을 못
         # 넘어가는지) 액션 종류와 무관하게 추적한다. 실측으로 발견한 문제
@@ -393,9 +409,22 @@ class ExplorerPolicy:
         # 탐험을 계속하며, 실제로 맞으면(HP 하락) 그때 FLEE로 반응한다.
 
         if not hud.ok or hud.room_name is None:
-            # HUD 못 읽음/복도(방 이름 없음) — 그냥 전진해서 방에 도착하길 기다림.
+            # HUD 못 읽음(글리치)이거나 문틈을 지나는 중("복도" = 방 이름
+            # 없음). 방금 전진 중이었다면(문을 막 통과하는 중) 그대로
+            # 전진해서 마저 건너가고, 그게 아니면(회전 등 다른 동작을
+            # 하던 중이었다면) 근거 없이 위치를 바꾸지 않고 직전 액션을
+            # 그대로 반복한다 — "정지하고 생각하고 움직이라"는 원칙(사용자
+            # 지시). 예전엔 이 분기에서 무조건 MOVE_FORWARD를 냈는데,
+            # RECENTER 측정(제자리 회전) 중에 room_name이 잠깐 흔들리면
+            # 그 틱에 억지로 전진해 문턱 옆벽에 부딪히거나 방금 나온
+            # 방으로 도로 넘어가 두 방 사이를 오가는 원인이 됐다
+            # (실측 피드백: seed 0, dev_log.md).
             self.prev_frame = obs
-            return int(self._Action.MOVE_FORWARD)
+            if self._last_action_was_forward:
+                return int(self._Action.MOVE_FORWARD)
+            if self._stuck_last_action is not None:
+                return int(self._stuck_last_action)
+            return int(self._Action.NO_OP)
 
         action = self._dispatch(hud, obs)
 
@@ -1358,6 +1387,7 @@ class ExplorerPolicy:
         if canon is not None and canon != self.scene.key_hint_room:
             # 문 통과 성공 — 새 방 발견 처리(잠긴 문 쪽 exits는 이미
             # "locked"로 기록돼 있으니 그대로 두고, 새 방을 정상 등록).
+            self.scene.door_unlocked = True
             return self._enter_room(hud, entry_heading=self.target_heading,
                                      parent=self.scene.key_hint_room)
 

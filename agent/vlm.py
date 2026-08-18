@@ -9,8 +9,12 @@ DB 상태를 함께 보내서, VLM이 그 방의 콘텐츠 DB를 "누적 갱신"
 거기에 confidence 게이트(agent/content_db.py, 0.8 미만은 폐기)까지 더해
 불확실한 관측으로 DB가 오염되는 걸 막는다.
 
-실제 플레이 중에는 act() 안에서 동기 호출하지 않는다(5초 예산 초과 위험) —
-프레임을 버퍼링해뒀다가 answer() 첫 호출 시 한 번에 처리한다(agent.py).
+answer()는 질문당 10초 예산이라 방이 여러 개면 거기서 한 번에 다 처리할
+여유가 없다 — 대신 agent.py가 SURVEY 동안 프레임을 방별로 버퍼링해뒀다가,
+그 방이 DFS상 "done"(4방향 다 확인 끝) 되는 순간 act() 안에서 그 방
+1개분만 호출한다. 방 하나씩 분산되므로 개별 act() 호출은 여전히 5초
+예산 안에 들고, QA 시작 시점엔 이미 다 채워져 있어 answer()는 조회만
+한다.
 
 urllib만 사용(표준 라이브러리) — requests 등 추가 의존성 없음, import
 시점에는 네트워크/무거운 로딩 없음(호출 시점에만 접근).
@@ -546,3 +550,57 @@ def recover_action(frame: np.ndarray, api_key: Optional[str] = None,
     """
     return _call_vlm_json(frame, _RECOVER_PROMPT, _RECOVER_SCHEMA,
                            "recover_action", api_key, timeout)
+
+
+# --- QA 폴백(agent/qa.py): 키워드 규칙이 애매할 때 딱 1번, 이미지 없이
+# 텍스트 전용 저가 모델에 "이 사실들만 근거로" 답하게 위임 ---------------
+from agent.config import QA_FALLBACK_MODEL, QA_TIMEOUT_S  # noqa: E402
+
+_QA_SCHEMA = {
+    "type": "object",
+    "properties": {"answer": {"type": "string"}},
+    "required": ["answer"],
+    "additionalProperties": False,
+}
+
+
+def qa_fallback(question: str, facts_json: str, api_key: Optional[str] = None,
+                 timeout: float = QA_TIMEOUT_S) -> VlmResult:
+    """질문 의도를 키워드로 못 잡았을 때만 호출. facts_json 안의 사실만
+    근거로 짧게 답하게 하고, 모르면 모른다고 말하게 지시한다(헛소리 방지).
+    answer()의 10초 예산을 지키기 위해 timeout을 짧게 잡는다."""
+    key = api_key or get_api_key()
+    if not key:
+        return VlmResult(ok=False, error="no_api_key")
+
+    prompt = (
+        "You are answering a question about a game episode a player just "
+        "finished, using ONLY the JSON facts below (this is the player's "
+        "complete memory of the episode -- nothing else is known). If the "
+        "facts don't contain the answer, say so plainly instead of "
+        "guessing. Answer in one short sentence.\n\n"
+        f"FACTS:\n{facts_json}\n\nQUESTION: {question}"
+    )
+    payload = {
+        "model": QA_FALLBACK_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "qa_answer", "strict": True, "schema": _QA_SCHEMA},
+        },
+        "temperature": 0,
+    }
+    req = urllib.request.Request(
+        _API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CONTEXT) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        data = json.loads(body["choices"][0]["message"]["content"])
+        return VlmResult(ok=True, data=data)
+    except (urllib.error.URLError, TimeoutError, KeyError, ValueError,
+            json.JSONDecodeError) as e:
+        return VlmResult(ok=False, error=str(e))

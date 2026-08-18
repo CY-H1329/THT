@@ -63,6 +63,12 @@ class SceneGraph:
         # 힌트 텍스트를 방 기록(wall_color 등)과 대조해 추정한 "열쇠가
         # 있을 것 같은 방" — 아직 실제로 못 찾았으면 None.
         self.key_target_room: Optional[str] = None
+        # QA용 영구 플래그(hud.has_key는 문을 여는 순간 다시 False로
+        # 꺼지는 일시적 값이라, "열쇠를 찾은 적이 있는지"는 따로 기억해야
+        # 한다). door_unlocked는 실제로 잠긴 문을 통과해 새 방에
+        # 들어갔을 때만 True.
+        self.key_found: bool = False
+        self.door_unlocked: bool = False
 
     def get_or_create(self, name: str) -> RoomNode:
         if name not in self.nodes:
