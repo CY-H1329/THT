@@ -282,7 +282,16 @@ def hint_banner_active(frame: np.ndarray) -> bool:
 
 def read_hint_text(frame: np.ndarray) -> str:
     """힌트 배너가 떠 있을 때, 내부의 여러 줄 텍스트를 합쳐서 반환한다.
-    "KEY HINT" 헤더 줄은 고정 문구이므로 제외한다.
+
+    줄은 잉크 행 밴드로 나누되, **배너 안쪽 배열 전체를 넘기고 y_off로
+    줄의 시작 행만 알려준다.** 예전에는 밴드 높이로 잘라낸 배열을
+    y_off=0으로 넘겼는데, 참조 글리프는 알파벳 전체의 어센더~디센더
+    범위(27px)로 잘려 있는 반면 디센더가 없는 줄의 밴드는 19~21px밖에
+    안 돼서 비교할 행이 모자랐다. 그래서 매칭이 통째로 실패했고, 공개
+    시드 10개 전부에서 빈 문자열이 나왔다.
+
+    첫 밴드는 고정 문구 "KEY HINT" 헤더라 **위치로** 버린다. 폰트 28에서는
+    헤더가 자주 오독돼서("l· l. 'r I lIN  f") 문자열 비교로는 안 걸린다.
     """
     box_x, box_y, box_w, box_h = hint_banner_box(frame.shape)
     bd = _HINT_BORDER_PX
@@ -302,17 +311,12 @@ def read_hint_text(frame: np.ndarray) -> str:
         y_start = y
         while y < H and row_has_ink[y]:
             y += 1
-        y_end = y
-        row_ink = ink[y_start:y_end, :]
-        bounds = _ink_x_bounds(row_ink)
+        bounds = _ink_x_bounds(ink[y_start:y, :])
         if bounds is None:
             continue
         x0, x1 = bounds
-        text = _read_line(row_ink, glyphs, x0, x1, y_off=0)
-        if text:
-            lines.append(text)
+        lines.append(_read_line(ink, glyphs, x0, x1, y_off=y_start).strip())
 
-    # 첫 줄은 "KEY HINT" 헤더(고정 문구) — 있으면 제외.
-    if lines and lines[0].upper().replace(" ", "") == "KEYHINT":
-        lines = lines[1:]
-    return " ".join(lines).strip()
+    if lines:
+        lines = lines[1:]              # "KEY HINT" 헤더
+    return " ".join(t for t in lines if t).strip()

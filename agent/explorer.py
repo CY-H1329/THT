@@ -26,6 +26,8 @@ from typing import Dict, List, Optional, Tuple
 
 from agent import enemies as EN
 from agent import geometry as geo
+from agent import hints as HINT
+from agent import keys as KEYS
 from agent import localize as L
 from agent import mapper as M
 from agent import motion as MOT
@@ -82,6 +84,22 @@ TRACK_MAX_TURNS = 26       # 트랙 조준에 허용하는 회전 스텝(≈한 
 # 역투영 위치 오차는 거리 제곱에 비례해 커진다(지평선 근처 1행 ≈ 1m).
 # 이보다 먼 움직임은 '저기서 뭔가 움직인다'로만 쓰고 트랙은 만들지 않는다.
 MOTION_TRACK_MAX = 7.0
+
+# --- 잠긴 문 / 열쇠 퀘스트 ---------------------------------------------
+# 잠긴 문에 1.5m 안으로 다가가야 (a) 열쇠가 스폰되고 (b) 힌트 배너가 뜬다
+# (env.cfg.door_touch_radius). 예전 DOOR_STANDOFF=2.3은 주석에 적혀 있듯
+# 일부러 그 반경 **밖**에 서서 자물쇠만 확인하고 돌아섰다. 그래서 열쇠가
+# 아예 생기지도 않았고, 힌트도 못 읽었다(실측: 시드 7 기록의 hints=[]).
+QUEST_NONE, QUEST_TOUCH, QUEST_SEEK, QUEST_RETURN, QUEST_DONE = range(5)
+DOOR_TOUCH_BACK = 0.6      # 문 안쪽 이 지점까지 들어간다(접촉 반경 1.5m 안)
+KEY_SEARCH_STEPS = 1200    # 한 후보 방에서 열쇠를 찾는 데 쓸 최대 스텝
+KEY_CHASE_RANGE = 8.0      # 이 안에서 열쇠가 보이면 곧장 그쪽으로 간다
+KEY_CHASE_BUDGET = 220     # 한 번의 방 훑기에서 '보이는 열쇠 쫓기'에 쓸 상한
+QUEST_MAX_STEPS = 6000     # 퀘스트 전체 예산. 넘기면 포기하고 탐색으로 복귀
+# 문 앞까지 가는 시도 횟수 상한. 접근점이 막혀 있으면 _drive가 giveup을
+# 내는데, 그때마다 다시 목표를 세우면 영영 반복된다(실측: 열쇠를 든 채
+# 문으로 27번 되돌아가며 스캔 50번, 5301스텝 소모).
+QUEST_DOOR_TRIES = 6
 # 사거리·콘 안에서 이만큼 때렸는데도 안 죽고 안 움직이면 트랙 위치가 틀린
 # 것이다(적 HP 상한 4 → 4대면 죽는다). 실측에서 유령 트랙 하나에 400회
 # 넘게 공격을 쏟아붓는 판이 있었다. 그런 트랙은 조준에서 빼고 킬로도
@@ -156,6 +174,16 @@ class Explorer:
         self._scan_phase = 0            # SCAN의 회전/정지 사이클 위치
         self._aim_track = None          # 이번 스텝 조준 대상 트랙 (없으면 None)
         self._motion_steps = 0          # 유효 정지 쌍을 얻은 스텝 수(진단용)
+        # 열쇠 퀘스트
+        self._quest = QUEST_NONE
+        self._hint_target = None            # hints.Target
+        self._key_cands: List[Tuple[int, int]] = []   # 후보 방 셀 (점수 순)
+        self._key_tried: set = set()
+        self._quest_started = -1
+        self._key_search_until = -1
+        self._had_key = False
+        self._key_chase = 0             # 남은 '열쇠 쫓기' 스텝 예산
+        self._quest_tries = 0
 
         self._fails: Dict[Tuple[Tuple[int, int], Optional[str]], int] = {}
         self._blacklist: Dict[Tuple[Tuple[int, int], Optional[str]], int] = {}
@@ -196,6 +224,7 @@ class Explorer:
 
         self._track_room(p)
         self._track_hp(p)
+        self._track_key(p)
         if self.last_action == MOVE_FORWARD and not p.moved:
             self._on_bump(p)
 
@@ -415,6 +444,8 @@ class Explorer:
             if locked:
                 # 문인 줄 알았는데 막혔고 자물쇠가 보인다 = 잠긴 문.
                 self.map.link(self.cur_cell, wall_dir, M.LOCKED)
+                self._locked_at = (self.cur_cell, wall_dir)
+                self._begin_quest()
                 self.memory["locked_door"] = {
                     "room": self.cur_name, "dir": wall_dir, "step": self.step_i,
                 }
@@ -536,15 +567,181 @@ class Explorer:
                 prev_room.walls[prev[1]] = M.UNKNOWN
         self.map.link(self.cur_cell, best, M.LOCKED)
         self._locked_at = (self.cur_cell, best)
+        self._begin_quest()
         self.memory["locked_door"] = {
             "room": self.cur_name, "dir": best, "step": self.step_i,
         }
         if self._goal_dir == best:
             self._waypoints.clear()
 
+    # --- 열쇠 퀘스트 ---------------------------------------------------
+    def _begin_quest(self) -> None:
+        """잠긴 문을 처음 확인했을 때 퀘스트를 연다."""
+        if self._quest == QUEST_NONE and self._locked_at is not None:
+            self._quest = QUEST_TOUCH
+            self._quest_started = self.step_i
+
+    def _on_hint(self, text: str) -> None:
+        """힌트를 읽었다 → 목표 조건으로 바꾸고 열쇠 찾기 단계로 넘어간다."""
+        target = HINT.parse(text)
+        if target.kind == "unknown" and self._hint_target is not None:
+            return                       # 이미 더 나은 해석을 갖고 있다
+        self._hint_target = target
+        self.memory["key_hint"] = {
+            "text": text, "kind": target.kind, "color": target.color,
+            "count": target.count, "wall": target.wall, "step": self.step_i,
+        }
+        if self._quest in (QUEST_NONE, QUEST_TOUCH):
+            self._quest = QUEST_SEEK
+            self._key_cands = []
+
+    def _rank_key_rooms(self) -> List[Tuple[int, int]]:
+        """힌트 조건에 맞는 방 후보를 점수 순으로. 스캔할 때마다 다시 부른다.
+
+        **하나로 못 좁히는 게 정상이다.** 벽 팔레트의 terracotta/brick/rust는
+        RGB 방향이 거의 같아서(코사인 0.999) 조명 아래에서는 색조만으로
+        갈리지 않는다(실측 40개 방 중 11개가 이 세 색끼리 헷갈렸다). 그래서
+        하나를 고르는 대신 순위를 매겨 위에서부터 가 본다 — 어차피 방문은
+        탐색으로도 하게 되는 일이라 손해가 작다.
+        """
+        t = self._hint_target
+        if t is None:
+            return []
+        scored: List[Tuple[float, Tuple[int, int]]] = []
+        for cell, room in self.map.rooms.items():
+            if t.kind == "color" and t.rgb is not None and room.wall_color:
+                scored.append((_cos(room.wall_color, t.rgb), cell))
+            elif t.kind == "image_count_wall":
+                # 이미지 개수는 아직 기록하지 않는다. 방향만이라도 맞으면
+                # 약한 가점을 준다(문/벽 판정은 이미 있다).
+                scored.append((0.5, cell))
+            else:
+                scored.append((0.4, cell))
+        scored.sort(key=lambda kv: -kv[0])
+        return [c for _s, c in scored]
+
+    def _quest_goal(self) -> Optional[int]:
+        """퀘스트가 시킬 일이 있으면 그 액션. 없으면 None(일반 탐색으로)."""
+        if self._quest in (QUEST_NONE, QUEST_DONE):
+            return None
+        if self.step_i - self._quest_started > QUEST_MAX_STEPS:
+            self._quest = QUEST_DONE      # 예산 초과 — 탐색으로 돌아간다
+            return None
+        if self._quest in (QUEST_TOUCH, QUEST_RETURN):
+            return self._drive_to_locked_door()
+        if self._quest == QUEST_SEEK:
+            return self._drive_to_key()
+        return None
+
+    def _drive_to_locked_door(self) -> Optional[int]:
+        """잠긴 문 **안쪽 0.6m**까지 간다. 접촉해야 열쇠가 생기고 배너가 뜬다."""
+        if self._locked_at is None:
+            self._quest = QUEST_DONE
+            return None
+        self._quest_tries += 1
+        if self._quest_tries > QUEST_DOOR_TRIES:
+            self._quest = QUEST_DONE      # 문 앞에 못 붙는다 → 탐색으로 복귀
+            return None
+        cell, d = self._locked_at
+        if self.cur_cell != cell:
+            path = self.map.route(self.cur_cell, cell)
+            if not path:
+                self._quest = QUEST_DONE   # 길을 모른다 → 탐색에 맡긴다
+                return None
+            return self._start_traverse(path[0])
+        self._goal_kind, self._goal_dir = "quest_door", d
+        self._goal_cell = cell
+        self._waypoints = [self.map.approach_point(cell, d, back=DOOR_TOUCH_BACK)]
+        self._wp_steps = 0
+        self.state = "GOTO"
+        return NO_OP
+
+    def _drive_to_key(self) -> Optional[int]:
+        """힌트가 가리키는 방으로 가서 열쇠를 줍는다."""
+        if not self._key_cands:
+            self._key_cands = [c for c in self._rank_key_rooms()
+                               if c not in self._key_tried]
+        if not self._key_cands:
+            return None                    # 아직 후보가 없다 → 계속 탐색
+        target = self._key_cands[0]
+        if self.cur_cell == target:
+            if self._key_search_until < 0:
+                self._key_search_until = self.step_i + KEY_SEARCH_STEPS
+            if self.step_i > self._key_search_until:
+                # 이 방엔 없다 → 다음 후보로
+                self._key_tried.add(target)
+                self._key_cands.pop(0)
+                self._key_search_until = -1
+                return None
+            return self._sweep_room_for_key(target)
+        path = self.map.route(self.cur_cell, target)
+        if not path:
+            self._key_tried.add(target)
+            self._key_cands.pop(0)
+            return None
+        return self._start_traverse(path[0])
+
+    def _sweep_room_for_key(self, cell: Tuple[int, int]) -> int:
+        """방 안을 격자로 훑는다. 열쇠가 보이면 곧장 그쪽으로 튼다."""
+        if self._waypoints and self._goal_kind == "keysweep":
+            return NO_OP                   # 진행 중인 웨이포인트를 _goto가 소화
+        ox, oz = self.map.room_origin(cell)
+        c = self.map.cell_size
+        pts = []
+        for fx in (0.25, 0.5, 0.75):
+            for fz in (0.25, 0.5, 0.75):
+                pts.append((ox + c * fx, oz + c * fz))
+        pts.sort(key=lambda p: self.pose.distance_to(*p))
+        self._goal_kind, self._goal_dir = "keysweep", None
+        self._goal_cell = cell
+        self._key_chase = KEY_CHASE_BUDGET
+        self._waypoints = pts
+        self._wp_steps = 0
+        self.state = "GOTO"
+        return NO_OP
+
+    def _track_key(self, p: Percept) -> None:
+        """HUD의 [KEY] 표시로 획득/소모를 잡아 퀘스트 단계를 넘긴다."""
+        if p.hp is None:                   # HUD를 아직 못 읽었다
+            return
+        if p.has_key and not self._had_key:
+            self._quest = QUEST_RETURN
+            self._quest_tries = 0
+            self._waypoints.clear()
+            self._key_search_until = -1
+            self.memory["events"].append(
+                {"type": "key_picked_up", "room": self.cur_name,
+                 "step": self.step_i})
+        elif self._had_key and not p.has_key:
+            # 열쇠가 사라졌다 = 문에 써서 열렸다. 이제 지나갈 수 있다.
+            self._quest = QUEST_DONE
+            if self._locked_at is not None:
+                cell, d = self._locked_at
+                self.map.link(cell, d, M.DOOR)
+            self.memory["door_unlocked"] = {"step": self.step_i}
+            self.memory["events"].append(
+                {"type": "door_unlocked", "step": self.step_i})
+            self._waypoints.clear()
+        self._had_key = p.has_key
+
+    def _key_in_view(self, p: Percept) -> Optional[int]:
+        """열쇠가 보이면 그쪽으로 한 스텝. 아니면 None."""
+        if self._quest != QUEST_SEEK or p.banner:
+            return None
+        found = KEYS.detect(p.frame)
+        if found is None:
+            return None
+        bearing, dist = found
+        if dist > KEY_CHASE_RANGE:
+            return None
+        if abs(bearing) > HEADING_TOL:
+            return TURN_LEFT if bearing > 0 else TURN_RIGHT
+        return MOVE_FORWARD
+
     def _record_hint(self, text: str) -> None:
         if text and (not self.memory["hints"] or self.memory["hints"][-1]["text"] != text):
             self.memory["hints"].append({"text": text, "step": self.step_i})
+            self._on_hint(text)
 
     # --- SCAN ----------------------------------------------------------
     def _begin_scan(self) -> None:
@@ -647,6 +844,14 @@ class Explorer:
             self._begin_scan()
             return TURN_LEFT
 
+        # 0) 잠긴 문 **접촉**만 먼저 한다. 바로 옆에 서 있을 때 10스텝이면
+        #    끝나고, 그 대가로 힌트를 읽고 열쇠가 스폰된다. 열쇠를 주우러
+        #    가는 건 훨씬 비싸므로 아래(3.5순위)로 미룬다.
+        if self._quest == QUEST_TOUCH:
+            quest = self._quest_goal()
+            if quest is not None:
+                return quest
+
         # 1) 이 방에서 바로 갈 수 있는, 아직 안 가본 방
         for d in self._sorted_dirs(self._usable_dirs(room)):
             dgx, dgz = M.DIR_DELTA[d]
@@ -664,6 +869,16 @@ class Explorer:
         hop = self._route_to_frontier(include_unverified=False)
         if hop:
             return self._start_traverse(hop)
+
+        # 3.5) 탐색이 끝났다 → 이제 열쇠를 주우러 간다.
+        #     방 커버리지가 QA 질문 대부분의 밑천이라 탐색이 먼저다. 실측:
+        #     퀘스트를 0순위로 두었더니 40초 예산에서 방문한 방이 66 → 40으로
+        #     반토막 났다. 잠긴 문 뒤 방 하나를 얻으려고 여섯 방을 포기하는
+        #     셈이라 남는 장사가 아니다. 대신 예전에 구석에서 보초만 서던
+        #     그 시간을 퀘스트에 쓴다.
+        quest = self._quest_goal()
+        if quest is not None:
+            return quest
 
         # 4) 갈 곳이 없다 → 보초 자세로. 남는 시간과 체력이 있으면 거기서
         #    "스캔으로만 벽이라 본" 방향을 되짚는다(_sentry 참고). 스캔은
@@ -732,13 +947,36 @@ class Explorer:
             self.stats["looks"] += 1
             self._register_blind_hit()
             return ATTACK
+        # 열쇠가 눈앞에 보이면 웨이포인트보다 그쪽이 우선이다. 단 **후보 방을
+        # 훑는 중일 때만**이고, 예산도 건다. 예전엔 SEEK인 동안 모든 주행에서
+        # 이걸 먼저 봤는데, 그러면 _drive가 아예 안 불려서 _wp_steps가 안
+        # 늘고 STUCK_LIMIT이 영영 안 걸린다. 나무 잎사귀나 sand/mustard 벽
+        # 같은 노란 오검출 하나에 걸려 방 이동 하나가 5429스텝을 먹었다
+        # (실측 시드 7: 전체 6633스텝 중 GOTO가 6054).
+        if self._goal_kind == "keysweep" and self._key_chase > 0:
+            chase = self._key_in_view(p)
+            if chase is not None:
+                self._key_chase -= 1
+                return chase
         if self._check_locked_door(p):
             return self._choose_goal()
         status, action = self._drive(p)
         if status == "driving":
             return action
         if status == "giveup":
+            if self._goal_kind in ("quest_door", "keysweep"):
+                self._waypoints.clear()
+                return self._choose_goal()
             return self._traverse_failed()
+        if self._goal_kind == "quest_door":
+            # 도착 = 문 앞 0.6m. 접촉을 확실히 하려고 한 번 더 민다.
+            # 접촉하면 env가 배너를 띄우고(열쇠 스폰) 열쇠가 있으면 연다.
+            self._recover = [MOVE_FORWARD] * 4
+            self._goal_kind = None
+            return MOVE_FORWARD
+        if self._goal_kind == "keysweep":
+            self._goal_kind = None
+            return self._choose_goal()
         if self._goal_kind == "through":
             self.state = "DOORCHECK"
             return NO_OP
@@ -746,6 +984,10 @@ class Explorer:
             self.state = "ENTER"
             self._enter_wait = 0
             return NO_OP
+        if self._quest in (QUEST_TOUCH, QUEST_SEEK, QUEST_RETURN):
+            # 퀘스트 중에 목표를 소진했으면 다음 퀘스트 단계로 넘어간다.
+            # 매번 72스텝짜리 재스캔을 끼우면 왕복이 통째로 낭비된다.
+            return self._choose_goal()
         self._begin_scan()
         return TURN_LEFT
 
@@ -764,6 +1006,8 @@ class Explorer:
             return TURN_LEFT if err > 0 else TURN_RIGHT
         if not p.banner and geo.lock_visible(p.frame):
             self.map.link(self.cur_cell, d, M.LOCKED)
+            self._locked_at = (self.cur_cell, d)
+            self._begin_quest()
             self.memory["locked_door"] = {
                 "room": self.cur_name, "dir": d, "step": self.step_i,
             }
@@ -784,6 +1028,8 @@ class Explorer:
         모르고 계속 밀면 수천 스텝을 버린다(개발 중 실제로 그랬다). 문
         2.4m 앞에서 판이 보이면 그 벽을 LOCKED로 확정하고 목표를 바꾼다.
         """
+        if self._goal_kind == "quest_door":
+            return False          # 일부러 만지러 가는 중이다
         if p.banner or self._goal_kind != "through" or self._goal_dir is None:
             return False
         dx, dz = self.map.door_point(self.cur_cell, self._goal_dir)
@@ -794,6 +1040,8 @@ class Explorer:
         if not geo.lock_visible(p.frame):
             return False
         self.map.link(self.cur_cell, self._goal_dir, M.LOCKED)
+        self._locked_at = (self.cur_cell, self._goal_dir)
+        self._begin_quest()
         self.memory["locked_door"] = {
             "room": self.cur_name, "dir": self._goal_dir, "step": self.step_i,
         }
@@ -1355,3 +1603,13 @@ class Explorer:
         self._combat_swing = 0
         self._combat_turns = 0
         self._threat_seen = -99
+
+
+def _cos(a, b) -> float:
+    """두 RGB의 방향 유사도. 조명은 밝기만 바꾸므로 방향으로 비교한다."""
+    import math as _m
+    na = _m.sqrt(sum(float(v) * v for v in a))
+    nb = _m.sqrt(sum(float(v) * v for v in b))
+    if na < 1e-6 or nb < 1e-6:
+        return 0.0
+    return sum(float(x) * float(y) for x, y in zip(a, b)) / (na * nb)
