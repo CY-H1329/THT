@@ -25,8 +25,9 @@
 실측 14개 후보에서 이 게이트가 14/14로 사진만 골라냈다. 여유도 크다 —
 사진은 팔레트 비율 0.00, 벽/몹은 0.92 이상이다.
 
-캡션은 **선택 사항**이다. OpenRouter 키가 있으면 백그라운드 스레드에서
-붙이고(act가 절대 블로킹되면 안 된다), 없으면 크롭과 서명만 남긴다.
+캡션은 **선택 사항**이다. `PhotoCapture(captioner=...)`에 vlm.Captioner를
+넘기면 사진이 확정되는 순간 캡션 요청이 큐에 들어간다(제출 자체는 0.3ms라
+act를 블로킹하지 않는다). 키가 없으면 크롭과 서명만 남는다.
 서명만으로도 "같은 카테고리 사진 두 장이 있는 방"(힌트 템플릿 3) 같은
 유사도 질문은 답할 수 있다.
 """
@@ -215,10 +216,13 @@ class PhotoCapture:
     돌리면 예산을 먹는다).
     """
 
-    def __init__(self):
+    def __init__(self, captioner=None):
         self._tracks: List[_Track] = []
-        self.pending: List[Photo] = []      # 확정됐고 아직 캡션 안 붙은 것
+        self.pending: List[Photo] = []      # 확정된 사진들
         self._last_heading: Optional[float] = None
+        # 캡션기(vlm.Captioner). 없거나 키가 없으면 크롭+서명만 남는다.
+        # submit은 큐에 넣기만 하므로 act를 블로킹하지 않는다(실측 0.3ms).
+        self.captioner = captioner
 
     def observe(self, frame: np.ndarray, step: int, room_key: str,
                 heading: float,
@@ -291,6 +295,8 @@ class PhotoCapture:
             if dup is None:
                 self.pending.append(p)
                 fresh.append(p)
+                if self.captioner is not None:
+                    self.captioner.submit(p)
             elif p.area > dup.area:
                 self.pending[self.pending.index(dup)] = p
         return fresh
