@@ -10,6 +10,7 @@ tmp/*.png
 tmp/vlm_dataset/
 tmp/vlm_dataset.zip
 tmp/vlm_results.jsonl
+tmp/qa_out/
 
 # 파이썬 캐시/빌드 산출물
 __pycache__/

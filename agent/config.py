@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-VLM_MODEL = "google/gemini-2.5-flash-lite"
+VLM_MODEL = "google/gemini-3.1-flash-lite"
 VLM_TIMEOUT_S = 4.0
 VLM_MAX_CALLS_PER_EPISODE = 60  # 크레딧/시간 안전판
 

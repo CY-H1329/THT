@@ -25,9 +25,16 @@ class RoomNode:
     name: str
     wall_color: Optional[str] = None
     entry_heading: Optional[int] = None  # 처음 이 방에 들어올 때 보고 있던 방향
-    # exits[heading] = "unknown" | "wall" | "open"
+    # exits[heading] = "unknown" | "wall" | "open" | "locked"
+    # ("locked": agent.geometry.lock_visible()로 자물쇠 판을 실측 확인한
+    # 방향 — 문은 있지만 열쇠 없인 못 지나감. unknown_headings()가 자동
+    # 제외하므로 재시도 후보에서 빠짐.)
     exits: Dict[int, str] = field(default_factory=lambda: {h: "unknown" for h in CARDINAL_HEADINGS})
     exit_leads_to: Dict[int, str] = field(default_factory=dict)  # heading -> room name (open인 경우만)
+    # SURVEY 중 VLM이 "이 방향은 문/통로로 보인다"고 답한 방향 집합
+    # (실제로 걸어가서 확인하기 전의 힌트일 뿐 — exits는 그대로
+    # "unknown"으로 남는다). SEEK가 후보 우선순위를 정할 때만 쓴다.
+    vlm_door_hint: Set[int] = field(default_factory=set)
     done: bool = False  # 4방향 다 확인 끝났으면 True (DFS에서 backtrack 대상)
     # 아래는 VLM 연동 단계에서 채움.
     images: List[dict] = field(default_factory=list)
@@ -45,6 +52,14 @@ class SceneGraph:
         # DFS 되돌아가기용 스택: (room_name, entry_heading)
         self.stack: List[tuple] = []
         self.visited_order: List[str] = []
+        # 잠긴 문을 터치해서 얻은 힌트 배너 텍스트 — 특정 방에 대한 정보가
+        # 아니라 "열쇠가 있는 방"을 설명하는 전역 사실이라 방 노드가 아닌
+        # 여기(그래프 레벨)에 둔다. key_hint_room/heading은 그 힌트를 얻은
+        # 잠긴 문의 위치(어느 방의 어느 방향)를 가리킨다 — 사람이 "잠긴
+        # 문 뒤에 뭐가 있어?" 같은 질문을 할 수도 있으므로.
+        self.key_hint_text: Optional[str] = None
+        self.key_hint_room: Optional[str] = None
+        self.key_hint_heading: Optional[int] = None
 
     def get_or_create(self, name: str) -> RoomNode:
         if name not in self.nodes:

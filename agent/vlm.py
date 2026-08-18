@@ -404,16 +404,9 @@ _DOOR_CHECK_PROMPT = (
 )
 
 
-def locate_door(frame: np.ndarray, api_key: Optional[str] = None,
-                 timeout: float = 3.0) -> VlmResult:
-    """이 방향을 "문 없음"으로 포기하기 직전 마지막으로 한 번 확인.
-
-    실측으로 확인된 문제(dev_log.md): 벽에 걸린 그림을 문으로 착각하고
-    물리적으로 못 지나가는 걸 감지하는 안전망은 있지만, 반대로 "저기 문이
-    있는데 통로가 좁아서 계속 부딪히는 것"과 "그냥 벽/그림이라 문이 아예
-    없는 것"을 구분은 못 한다. 실패 시 예외 없이 VlmResult(ok=False) —
-    호출자는 그냥 벽으로 마킹하고 다음 후보로 넘어가면 된다.
-    """
+def _call_vlm_json(frame: np.ndarray, prompt: str, schema: dict, schema_name: str,
+                    api_key: Optional[str], timeout: float) -> VlmResult:
+    """locate_door/locate_enemy/classify_heading이 공유하는 요청 조립+호출."""
     key = api_key or get_api_key()
     if not key:
         return VlmResult(ok=False, error="no_api_key")
@@ -423,13 +416,13 @@ def locate_door(frame: np.ndarray, api_key: Optional[str] = None,
         "messages": [{
             "role": "user",
             "content": [
-                {"type": "text", "text": _DOOR_CHECK_PROMPT},
+                {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": _encode_jpeg(frame)}},
             ],
         }],
         "response_format": {
             "type": "json_schema",
-            "json_schema": {"name": "locate_door", "strict": True, "schema": _DOOR_CHECK_SCHEMA},
+            "json_schema": {"name": schema_name, "strict": True, "schema": schema},
         },
         "temperature": 0,
     }
@@ -452,3 +445,58 @@ def locate_door(frame: np.ndarray, api_key: Optional[str] = None,
     except (urllib.error.URLError, TimeoutError, KeyError, ValueError,
             json.JSONDecodeError) as e:
         return VlmResult(ok=False, error=str(e))
+
+
+def locate_door(frame: np.ndarray, api_key: Optional[str] = None,
+                 timeout: float = 3.0) -> VlmResult:
+    """이 방향을 "문 없음"으로 포기하기 직전 마지막으로 한 번 확인.
+
+    실측으로 확인된 문제(dev_log.md): 벽에 걸린 그림을 문으로 착각하고
+    물리적으로 못 지나가는 걸 감지하는 안전망은 있지만, 반대로 "저기 문이
+    있는데 통로가 좁아서 계속 부딪히는 것"과 "그냥 벽/그림이라 문이 아예
+    없는 것"을 구분은 못 한다. 실패 시 예외 없이 VlmResult(ok=False) —
+    호출자는 그냥 벽으로 마킹하고 다음 후보로 넘어가면 된다.
+    """
+    return _call_vlm_json(frame, _DOOR_CHECK_PROMPT, _DOOR_CHECK_SCHEMA,
+                           "locate_door", api_key, timeout)
+
+
+# SURVEY(새 방 진입 직후 4방향을 하나씩 정면으로 바라보는 단계)에서, 그
+# 방향으로 실제로 걸어가 보기 전에 먼저 물어본다. locate_door()와 달리
+# "이미 여러 번 부딪혀서 실패한 뒤 마지막으로 확인"하는 맥락이 아니라
+# "이제 막 이 방향을 정면으로 보고 있고 아직 한 걸음도 안 걸었다"는
+# 맥락이라 프롬프트를 분리했다(사용자 지시: 매번 움직이기 전에 먼저
+# VLM에게 문인지 확인). 이미 정면을 보고 있으므로 방향(bearing)은
+# 필요 없다.
+_HEADING_CHECK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_door_or_opening": {"type": "boolean"},
+    },
+    "required": ["is_door_or_opening"],
+    "additionalProperties": False,
+}
+
+_HEADING_CHECK_PROMPT = (
+    "One frame from a first-person 3D game (HUD cropped out). The player "
+    "is standing still, looking directly at one wall of the room, deciding "
+    "whether it's worth walking that way. Is there an actual door, open "
+    "doorway, or passage to another room straight ahead? A flat "
+    "picture/photo frame hanging on the wall, a decorative object, or a "
+    "plain solid wall does NOT count -- only a real gap/passage/doorway "
+    "leading further does. Answer only the JSON field, no extra text."
+)
+
+
+def classify_heading(frame: np.ndarray, api_key: Optional[str] = None,
+                      timeout: float = 3.0) -> VlmResult:
+    """SURVEY 중 한 방향을 정면으로 본 프레임 한 장으로 문/벽을 미리 판단.
+
+    호출자는 ok and data["is_door_or_opening"]가 True일 때만 "문일
+    가능성 높음" 힌트로 쓰고, ok가 False(네트워크 오류/타임아웃/예산
+    소진)면 기존 물리 확인(is_blocked 기반 SEEK) 안전망에 그대로
+    맡긴다 — 이 함수는 SEEK를 대체하지 않고, 명백한 벽에 헛되이
+    부딪혀보는 시도만 줄여준다.
+    """
+    return _call_vlm_json(frame, _HEADING_CHECK_PROMPT, _HEADING_CHECK_SCHEMA,
+                           "classify_heading", api_key, timeout)

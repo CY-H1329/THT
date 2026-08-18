@@ -43,9 +43,31 @@ print(f"seed={SEED} 시작. ESC로 중단.")
 
 i = 0
 term = trunc = False
+prev_state = policy.state
+hint_reported = False
+had_key = False
 for i in range(1, MAX_STEPS + 1):
     action = policy.step(obs)
     obs, _r, term, trunc, _info = env.step(action)
+
+    if policy.state != prev_state:
+        if policy.state == "HINT_CAPTURE":
+            print(f"step={i:4d} >>> 잠긴 문 발견, 힌트 배너 확인하러 접근 중...")
+        elif prev_state == "HINT_CAPTURE":
+            print(f"step={i:4d} <<< 힌트 캡처 종료, SEEK 복귀")
+        prev_state = policy.state
+    if policy.scene.key_hint_text and not hint_reported:
+        print(f"step={i:4d} *** 힌트 텍스트 확보: {policy.scene.key_hint_text!r} "
+              f"(방={policy.scene.key_hint_room}, heading={policy.scene.key_hint_heading})")
+        hint_reported = True
+
+    # 열쇠 헌팅 로직 없이도 자연스러운 탐험 동선만으로 열쇠를 줍는지
+    # 눈으로 확인하기 위한 계측(사용자 요청) — HUD의 [KEY] 표시가
+    # False->True로 바뀌는 순간을 잡는다.
+    hud_key_check = read_hud(obs)
+    if hud_key_check.ok and hud_key_check.has_key and not had_key:
+        print(f"step={i:4d} $$$ 열쇠 자연 습득! room={hud_key_check.room_name!r}")
+        had_key = True
 
     bgr = cv2.cvtColor(obs, cv2.COLOR_RGB2BGR)
     cv2.imshow(_WINDOW, bgr)
@@ -70,3 +92,8 @@ for i in range(1, MAX_STEPS + 1):
 env.close()
 cv2.destroyAllWindows()
 print(f"discovered rooms: {list(policy.scene.nodes.keys())}")
+for name, node in policy.scene.nodes.items():
+    print(f"  {name}: exits={node.exits} vlm_hint={node.vlm_door_hint}")
+if policy.scene.key_hint_text:
+    print(f"key hint: {policy.scene.key_hint_text!r} "
+          f"(room={policy.scene.key_hint_room}, heading={policy.scene.key_hint_heading})")

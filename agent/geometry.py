@@ -180,3 +180,41 @@ def color_close(a, b, tol: int = 40) -> bool:
     if a is None or b is None:
         return False
     return all(abs(int(x) - int(y)) <= tol for x, y in zip(a, b))
+
+
+# --- 잠긴 문 자물쇠 판 인식 ------------------------------------------------
+# 실측 확인된 문제(dev_log.md): SEEK가 특정 방향을 계속 "물리적으로 막힘"
+# 으로만 보고 반복 시도하다가, 알고 보니 벽이 아니라 "잠긴 문"(자물쇠
+# 아이콘 판)이었던 사례가 있었다 — 열쇠 없인 절대 못 지나가므로 몇 번을
+# 재시도해도 소용없는데, 그걸 몰라서 시간을 크게 낭비했다. 잠긴 문의
+# 자물쇠 판은 따뜻한 황금색 바탕(실측 RGB (143,130,104)~(196,180,100),
+# R>G>B) 위에 진한 검정/회색 자물쇠 그림이 있다 — 이 조합(황금색 배경 +
+# 그 안의 어두운 얼룩)을 같이 요구해서 mustard 같은 실제 벽 색과 구분한다
+# (mustard는 배경만 비슷하고 안에 어두운 그림이 없음).
+def _warm_gold(region: np.ndarray) -> np.ndarray:
+    r = region[..., 0].astype(np.int32)
+    g = region[..., 1].astype(np.int32)
+    b = region[..., 2].astype(np.int32)
+    return (r > g) & (g > b) & (r - b > 25) & (r > 80)
+
+
+def lock_visible(frame: np.ndarray, min_warm_frac: float = 0.6,
+                  min_dark_frac: float = 0.2) -> bool:
+    """잠긴 문의 자물쇠 판이 화면에 크게 보이는지(SEEK가 이 방향을
+    포기하기 전에 확인하는 용도). 힌트 배너(잠긴 문에 닿을 때만 뜬다)와
+    함께 쓰면 더 확실하지만, 이건 "닿기 전에 멀리서도" 감지하기 위한
+    보조 신호다.
+
+    실측(dev_log.md): 처음엔 임계값을 낮게 잡았다가 sand 계열 벽 + 어두운
+    벽그림(예: 상어 사진) 조합에서 오탐이 났다(warm_frac=0.52,
+    dark_frac=0.16). 진짜 잠긴 문(warm_frac=0.66, dark_frac=0.34)과는
+    확실히 갈리길래 두 기준 다 그 사이로 올렸다 — 그래도 샘플이 많지
+    않아 100% 신뢰하진 않는다(오탐지 시 SEEK가 실제로는 열리는 문을
+    "잠김"으로 잘못 건너뛸 위험 있음, report.md에 한계로 기록 예정)."""
+    region = frame[HUD_H:FRAME_H, FRAME_W // 4: 3 * FRAME_W // 4]
+    warm = _warm_gold(region)
+    if float(warm.mean()) < min_warm_frac:
+        return False
+    gray = region.astype(np.int32).sum(axis=-1) / 3.0
+    dark = gray < 60
+    return float(dark.mean()) >= min_dark_frac

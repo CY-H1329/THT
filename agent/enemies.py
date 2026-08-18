@@ -217,3 +217,60 @@ def _color_diversity(frame: np.ndarray, seg: slice, quant: int = 24) -> int:
         return 0
     quantized = (colorful // quant) * quant
     return int(len(np.unique(quantized, axis=0)))
+
+
+# --- 근접(공격 사거리 이내) 전용 저비용 방위 추정 --------------------------
+# 실측으로 발견(dev_log.md, seed=7 실제 전투 프레임): detect()의 바닥
+# 접점/사람 비율 판정은 "적이 화면 중앙~하단에 사람 모양으로 작게 보이는"
+# 중간 거리 기준이라, FLEE strike 진입 시점(=이미 맞아서 적이 1.3~1.5m
+# 코앞에 있음, 상단 주석 참고)에는 몸통이 화면을 거의 다 채워 바닥이 안
+# 보이고 실루엣 비율도 안 맞아 구조적으로 0개 탐지된다 — 그 결과 매
+# 전투가 CV를 한 번도 못 쓰고 곧장 24방향 sweep(최대 72틱)으로 빠져서
+# "예전처럼 즉각적으로 안 죽인다"는 원인이었다. 이 함수는 사람형 판정을
+# 아예 안 하고 "바닥도 아니고 이 방의 벽색도 아닌 큰 덩어리"의 무게중심
+# 방위만 구한다 — FLEE strike는 HP가 실제로 깎여서 진입한 상태라(=바로
+# 앞에 뭔가 있다는 게 이미 확정됨) 일반 스캔과 달리 오탐 걱정이 적다.
+_CLOSE_RANGE_MIN_FRAC = 0.15   # 이 이하로 "벽도 바닥도 아닌" 영역이면 무시
+_CLOSE_RANGE_WALL_DIFF = 120   # RGB 채널합 기준 벽색과의 최소 차이
+# 실측으로 발견(dev_log.md, seed=7): 적을 실제로 죽인 뒤에도(HP 0, 몸체가
+# 렌더에서 제거됨) 문틈으로 보이는 다른 방/복도 풍경이 "바닥도 벽도 아닌
+# 큰 덩어리" 조건을 계속 만족해서, 죽은 상대를 계속 "공격"(전부 빗나감)
+# 하며 sweep까지 이어지는 낭비가 있었다. 진짜 근접 적은 발이 바로 앞
+# 바닥에 닿아 있어서 몸체가 화면 맨 아래 몇 행까지 반드시 이어지는데
+# (실측: 킬 직전 프레임은 맨 아래 20%의 29%가 후보 픽셀), 문틈 너머
+# 풍경은 그 앞에 진짜 바닥이 있어서 맨 아래까지 안 내려온다(실측: 0%).
+# 이 차이로 "코앞의 진짜 몸체"와 "멀리 문틈 너머 풍경"을 가른다.
+_CLOSE_RANGE_BOTTOM_FRAC_MIN = 0.20  # 맨 아래 20% 구간에서 요구하는 최소 후보 비율
+_CLOSE_RANGE_BOTTOM_BAND = 0.20      # 프레임 하단 몇 %를 "발밑" 구간으로 볼지
+
+
+def close_range_bearing(frame: np.ndarray, wall_rgb: Optional[Tuple[int, int, int]] = None,
+                         min_frac: float = _CLOSE_RANGE_MIN_FRAC) -> Optional[float]:
+    """근접 전투 전용: 적일 가능성이 높은 큰 덩어리의 방위(도)만 빠르게 추정.
+
+    None을 반환하면 호출자가 detect()(중간 거리용)나 sweep으로 넘어가면
+    된다. HUD 아래 전체 프레임에서 "바닥(무채색 체커보드)도 아니고
+    (wall_rgb가 있으면) 이 방 벽색과도 다른" 픽셀의 열(column) 방향
+    무게중심을 방위로 환산한다. 화면 맨 아래(발밑)까지 이어지지 않는
+    덩어리는 문틈 너머 풍경일 가능성이 높아 제외한다(위 주석 참고).
+    """
+    body = frame[geo.HUD_H:, :, :]
+    sat = geo.saturation(body)
+    not_floor = sat >= geo._SAT_THRESHOLD
+    if wall_rgb is not None:
+        diff = np.abs(body.astype(np.int32) - np.array(wall_rgb, dtype=np.int32)).sum(axis=-1)
+        mask = not_floor & (diff > _CLOSE_RANGE_WALL_DIFF)
+    else:
+        mask = not_floor
+    if mask.mean() < min_frac:
+        return None
+    bottom_start = int(mask.shape[0] * (1.0 - _CLOSE_RANGE_BOTTOM_BAND))
+    if mask[bottom_start:].mean() < _CLOSE_RANGE_BOTTOM_FRAC_MIN:
+        return None
+    col_weight = mask.sum(axis=0).astype(np.float64)
+    total = col_weight.sum()
+    if total <= 0:
+        return None
+    cols = np.arange(len(col_weight))
+    centroid_col = float((cols * col_weight).sum() / total)
+    return -math.degrees(math.atan((centroid_col - geo.CX) / geo.FOCAL))

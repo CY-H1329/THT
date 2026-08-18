@@ -13,9 +13,23 @@
              (world/layout.py의 격자 구조로 보장됨, README의 heading<->wall
              대응표와도 일치) — 그래서 임의의 각도를 찔러볼 필요가 없다.
              agent.py는 이 상태일 때 프레임을 버퍼링해서 나중에 VLM에 보낸다.
-  SEEK     — 후보 방향 하나를 향해 전진. 막히면(벽이든 물건이든 구분 없이)
-             조금씩 회전하며 재시도, 그래도 안 되면 "이 방향엔 문 없음"
-             으로 기록하고 다음 후보로. 방 이름이 바뀌면 문을 찾은 것.
+             각 방향을 정면으로 본 시점에 예산이 남아있으면
+             agent.vlm.classify_heading()도 한 번 불러 "문처럼 보이는지"
+             미리 물어본다(사용자 지시: 움직이기 전에 먼저 VLM에게 확인).
+             VLM이 "문 아님"이라고 확신하면 그 자리에서 바로 exits를
+             "wall"로 기록해 SEEK의 물리 접근(부딪혀보기+180도 등 CV
+             안전망) 자체를 건너뛴다 — 명백한 벽에 헛되이 부딪히는 시도를
+             줄이는 게 목적. "문일 수 있음"이면 vlm_door_hint에만 남기고
+             exits는 여전히 unknown으로 둔다(진짜 문인지, 어디로
+             이어지는지는 결국 실제로 걸어가야 알 수 있으므로) — SEEK가
+             후보를 고를 때 이 힌트가 있는 방향을 먼저 시도한다. VLM이
+             실패/타임아웃/예산소진이면 기존과 완전히 동일하게 동작
+             (VLM은 어디까지나 주력, CV 물리 확인이 최종 보험 — 사용자
+             확인: "VLM이 주력, CV는 보험").
+  SEEK     — 후보 방향 하나를 향해 전진(vlm_door_hint가 있는 방향 우선).
+             막히면(벽이든 물건이든 구분 없이) 조금씩 회전하며 재시도,
+             그래도 안 되면 "이 방향엔 문 없음"으로 기록하고 다음 후보로.
+             방 이름이 바뀌면 문을 찾은 것.
   RETURN   — 이미 가본 방으로 연결됐거나, 이 방의 4방향을 다 확인해서
              이전 방으로 되돌아가야 할 때(DFS backtrack).
   FLEE     — HP가 실제로 깎이는 걸 감지하면(=적이 근처에 있다는 뜻) 최우선
@@ -61,10 +75,10 @@ from __future__ import annotations
 from agent import enemies as EN
 from agent import geometry as geo
 from agent.memory import SceneGraph, CARDINAL_HEADINGS
-from agent.ocr import hint_banner_active, read_hud
+from agent.ocr import hint_banner_active, read_hint_text, read_hud
 from agent.palette import WALL_PALETTE
 from agent.vision import is_blocked, sample_wall_color
-from agent.vlm import locate_door, locate_enemy
+from agent.vlm import classify_heading, locate_door, locate_enemy
 from agent.config import VLM_MAX_CALLS_PER_EPISODE
 
 _WALL_RGB_BY_NAME = dict(WALL_PALETTE)
@@ -82,6 +96,13 @@ _MOB_MAX_COMBAT_DIST_M = 4.0
 # 진짜 적이면 HP 1~4라 몇 방이면 죽어야 정상인데 콘/사거리 조건을 계속
 # 만족하며 공격이 이만큼 연속되면 오탐으로 보고 sweep으로 넘어간다.
 _FASTPATH_ATTACK_STREAK_MAX = 4
+# close_range_bearing()은 FLEE strike 진입 시점(=이미 맞아서 적이 코앞)
+# 에만 쓰여서 오탐 위험이 훨씬 낮다 — 실측(dev_log.md, seed=7): 적 HP가
+# 1~4인데 위 4번 cap에 걸려 매번 sweep으로 밀려나서, 근접 탐지가 성공해도
+# 총 전투 시간이 거의 안 줄었다(그대로 매번 sweep을 다시 타서 39틱대
+# 유지). 진짜 적이 확실한 상황이라 cap을 넉넉히 늘려 fastpath만으로
+# 끝까지 죽일 기회를 준다(빗맞음 몇 번 있어도 충분하도록 최대 HP의 2배).
+_CLOSE_RANGE_ATTACK_STREAK_MAX = 8
 
 # 전진 전에 미리 확인하는 정면 클리어런스(agent.geometry 깊이 프로파일).
 # AGENT_RADIUS(0.4m) + 한 스텝(0.15m) + 여유. 이걸로 "가보고 막히면 반응"
@@ -100,9 +121,19 @@ _SIDESTEP_MAX_PROBE_DEG = 35.0  # FOV_X_DEG(~75)의 절반 안쪽만 신뢰
 
 _TURN_TOLERANCE = 7        # 목표 방향과 이 각도 이내면 "정렬됨"
 _RECOVER_MAX_ATTEMPTS = 8  # 이만큼 회전해도 계속 막히면 "이 방향엔 문 없음"
+# 중간에 성공적 전진이 껴서 recover_attempts가 리셋되더라도, "이 목표
+# 헤딩에서 180도-포기(구석 몰림)를 통째로 몇 번 겪었는지"는 별도로 세서
+# 무한히 방을 맴도는 걸 막는다(실측으로 발견, dev_log.md).
+_MAX_CORNERED_PER_TARGET = 3
 _RECENTER_STEPS = 8        # 힌트 배너 중(깊이 측정 불가) 폴백용 소량 고정 전진
 _RECENTER_MAX_STEPS = 40   # clearance 기반 중앙 이동의 안전 상한(=최대 6m)
 _RECENTER_BACKOFF = 3      # 막힌 뒤 벽에서 떨어지려고 후진하는 스텝 수
+
+# HINT_CAPTURE: door_touch_radius=1.5m(difficulty.yaml 실측 확인). 자물쇠가
+# 보일 만큼 가까이 있는 "구석에 몰린" 상태는 대개 이미 그 안쪽이거나
+# 한두 스텝(forward_step=0.15m) 안이라 20스텝(=최대 3.0m 전진 시도)이면
+# 충분하고도 남는다 — 못 미쳐도 collision이 먼저 막아줌.
+_HINT_CAPTURE_MAX_APPROACH_TICKS = 20
 
 # 공격 콘 정면 ±20도(전체 40도), 회전 1회 15도(_ATTACK_CONE_HALF_RAD/turn_step,
 # 소스로 확인) — 15도 간격으로 돌면서 매 위치마다 공격하면 콘끼리 겹쳐서
@@ -110,6 +141,12 @@ _RECENTER_BACKOFF = 3      # 막힌 뒤 벽에서 떨어지려고 후진하는 �
 _FLEE_SWEEP_HEADINGS = 24              # 360 / 15도
 _FLEE_SWEEP_ATTACKS_PER_HEADING = 2    # 적 HP 1~4 감안, 걸렸을 때 한 방에 안 죽어도 잡도록
 _FLEE_SWEEP_RECHECK_EVERY = 4          # 이만큼 방향을 돌 때마다 VLM으로 "아직 있는지" 재확인
+# 실측(dev_log.md, seed=7): close_range_bearing()으로 이미 명중까지
+# 시켰는데(flee_ever_attacked=True) 그 다음 틱에 갑자기 못 찾으면, 적
+# HP가 1~4라 대부분 죽어서 사라진 경우다 — 이럴 때도 못 찾은 이유를
+# "안 보였을 뿐일 수도 있다"고 24방향(최대 72틱) 풀스윕을 다 도는 건
+# 낭비다. 짧게만 확인하고 없으면 바로 복귀한다.
+_FLEE_SWEEP_QUICK_CHECK_HEADINGS = 4
 _FLEE_STRIKE_MAX_TICKS = (             # 안전 상한: VLM 조준 실패 후 sweep 풀 사이클까지 감안
     _FLEE_SWEEP_HEADINGS * (_FLEE_SWEEP_ATTACKS_PER_HEADING + 1) + 4
 )
@@ -144,6 +181,7 @@ class ExplorerPolicy:
         self.flee_sweep_active = False   # CV가 못 찾아서(또는 안 죽어서) 결정론적 sweep으로 전환했는지
         self.flee_sweep_headings_done = 0
         self.flee_sweep_attacks_done = 0
+        self.flee_sweep_heading_limit = _FLEE_SWEEP_HEADINGS
         self.flee_fastpath_attack_streak = 0  # CV 조준으로 같은 자리를 연속 공격한 횟수
         self.vlm_calls_used = 0      # strike 단계 locate_enemy() 호출 수(예산 상한용)
         self._proactive_attack_streak = 0  # 선제공격(비FLEE)이 연속 몇 틱째인지 — 무한루프 방지용
@@ -165,8 +203,21 @@ class ExplorerPolicy:
         self._nav_bias_deg = 0.0  # SEEK/RETURN 중 국지 장애물을 비켜가는 임시 헤딩 오프셋
         self._nav_fail_count = 0     # 지금 목표를 몇 번째 "완전히 못 뚫음"으로 포기했는지(단계적 복구용)
         self._nav_action_queue: list = []  # 단계적 복구 중 미리 정해둔 액션 시퀀스(후진/옆걸음 등)
+        self._nav_probed_center = False  # 이 방향으로 정렬한 뒤 전진을 한 번이라도 실제로 시도해봤는지
+        self._nav_cornered_count = 0  # 이 목표 헤딩에서 180도-포기를 통째로 몇 번 겪었는지
         self._hud_cache_key = None
         self._hud_cache_value = None
+
+        # HINT_CAPTURE: 자물쇠 판을 발견하면 잠깐 이 상태로 빠져 문 쪽으로
+        # 더 다가가(터치 반경 안으로) 힌트 배너를 띄우고 읽은 뒤, 원래
+        # 있던 자리 근처로 물러난다. seek_origin_room/target_heading은
+        # SEEK에서 그대로 물려받아 안 바꾸므로 별도로 저장할 필요가 없다.
+        self._hint_capture_phase = None  # None | "approach" | "retreat"
+        self._hint_capture_forward_steps = 0
+        self._hint_capture_retreat_remaining = 0
+        self._hint_capture_return_state = None
+        self._hint_capture_confirmed_locked = False  # 배너가 실제로 떴는지
+        self._hint_captured_this_door = False  # 같은 문에서 재시도 방지
 
     # HUD OCR은 프레임당 ~140ms(글리프 템플릿 매칭)로 압도적인 병목이었다
     # (dev_log.md 실측: EN.detect 1.6ms/depth_profile 1.4ms와 비교해 100배).
@@ -202,6 +253,7 @@ class ExplorerPolicy:
                 self.flee_sweep_active = False
                 self.flee_sweep_headings_done = 0
                 self.flee_sweep_attacks_done = 0
+                self.flee_sweep_heading_limit = _FLEE_SWEEP_HEADINGS
                 self.flee_fastpath_attack_streak = 0
             self.last_hp = hud.hp
 
@@ -235,6 +287,17 @@ class ExplorerPolicy:
             return int(self._Action.ATTACK)
         self._proactive_attack_streak = 0
 
+        # "사거리 밖 적을 멈춰서 지켜보다 다가오면 공격" 로직을 시도했다가
+        # 실측으로 되돌렸다(dev_log.md) — 이 게임은 후진해도 적과의 거리가
+        # 안 벌어진다는 게 이미 확인된 사실이라, 멈춰서 기다리든 탐험을
+        # 계속하든 "언젠가 다가와서 맞는" 타이밍 자체는 거의 안 바뀐다.
+        # 대신 멈춰서 지켜보는 동안 탐험 진행(다음 문 찾기 등)이 완전히
+        # 멎어서, 적이 많은 방(Coral Vault 등)에 에이전트가 계속 묶여
+        # 있다가 반복 교전으로 죽는 결과가 났다(같은 seed=7: 이 로직
+        # 켰을 때 640스텝만에 사망 vs 껐을 때 4000스텝 끝까지 생존,
+        # 직접 A/B로 확인). 그래서 사거리 밖 적은 그냥 무시하고 하던
+        # 탐험을 계속하며, 실제로 맞으면(HP 하락) 그때 FLEE로 반응한다.
+
         if not hud.ok or hud.room_name is None:
             # HUD 못 읽음/복도(방 이름 없음) — 그냥 전진해서 방에 도착하길 기다림.
             self.prev_frame = obs
@@ -253,6 +316,8 @@ class ExplorerPolicy:
             return self._step_survey(hud, obs)
         if self.state == "SEEK":
             return self._step_seek(hud, obs)
+        if self.state == "HINT_CAPTURE":
+            return self._step_hint_capture(hud, obs)
         if self.state == "RETURN":
             return self._step_return(hud, obs)
         if self.state == "DONE":
@@ -384,6 +449,14 @@ class ExplorerPolicy:
             return self._Action.TURN_LEFT if diff > 0 else self._Action.TURN_RIGHT
 
         self.survey_samples[target] = sample_wall_color(obs)
+        if self.vlm_calls_used < _FLEE_VLM_MAX_CALLS:
+            self.vlm_calls_used += 1
+            result = classify_heading(obs)
+            if result.ok:
+                if result.data.get("is_door_or_opening"):
+                    node.vlm_door_hint.add(target)
+                elif node.exits.get(target) == "unknown":
+                    node.exits[target] = "wall"
         self.survey_queue.pop(0)
         if self.survey_queue:
             return self._Action.NO_OP
@@ -405,6 +478,10 @@ class ExplorerPolicy:
         if not candidates:
             node.done = True
             return self._start_backtrack(canon)
+        # SURVEY에서 VLM이 "문처럼 보인다"고 한 방향을 먼저 시도한다 —
+        # 문이 아닐 후보를 먼저 물리적으로 부딪혀보며 시간을 낭비하지
+        # 않기 위함.
+        candidates = sorted(candidates, key=lambda h: h not in node.vlm_door_hint)
         self.target_heading = candidates[0]
         self.seek_origin_room = canon
         self.recover_attempts = 0
@@ -413,6 +490,9 @@ class ExplorerPolicy:
         self._nav_bias_deg = 0.0
         self._nav_fail_count = 0
         self._nav_action_queue = []
+        self._nav_probed_center = False
+        self._nav_cornered_count = 0
+        self._hint_captured_this_door = False
         self.state = "SEEK"
         return self._Action.NO_OP
 
@@ -495,6 +575,7 @@ class ExplorerPolicy:
         diff = _heading_diff(hud.heading, effective_target)
         if abs(diff) > _TURN_TOLERANCE:
             self._last_action_was_forward = False
+            self._nav_probed_center = False
             return self._Action.TURN_LEFT if diff > 0 else self._Action.TURN_RIGHT
 
         # depth profile로 미리 피하는 건 어디까지나 "부딪히는 모양새를
@@ -547,11 +628,25 @@ class ExplorerPolicy:
         # 틈도 "뚫림"으로 오판했다(dev_log.md).
         center_clear = geo.cone_clearance(
             profile, 0.0, _SEEK_CONE_HALF_DEG) >= _SEEK_SAFE_CLEARANCE
-        if center_clear:
+        # 실측으로 새로 발견한 버그(dev_log.md): 문/통로를 몇 m 떨어져서
+        # 정면으로 바라볼 때, 문 폭이 15도 콘보다 좁으면 콘 양옆이 문틀
+        # 옆 벽을 걸치고, floor_boundary()가 "바닥이 화면 맨 아래까지 안
+        # 보이면 아주 가까운 장애물"로 간주하는 휴리스틱(NEAR_RANGE 폴백)
+        # 때문에 그 벽까지의 실제 거리와 무관하게 0.6m로 뭉개진다 — 그
+        # 결과 VLM이 방금 "문 맞다"고 확인해준 방향인데도 전진을 단 한
+        # 번도 시도 안 하고 곧장 막힌 걸로 포기해버렸다. depth profile은
+        # 어디까지나 "미리 피하는" 보조 신호이지 전진 자체를 막는
+        # 근거여선 안 된다 — 이 방향으로 정렬한 뒤 아직 한 번도 실제로
+        # 전진해본 적이 없다면, depth가 뭐라 하든 일단 한 번은 실제로
+        # 시도해서 is_blocked()로 물리 확인한다(그래도 진짜 막혀 있으면
+        # 바로 다음 틱에 정상적으로 recover_attempts가 올라가 기존 복구
+        # 로직으로 이어진다 — 안전망은 그대로 유지됨).
+        if center_clear or not self._nav_probed_center:
             # bias를 원래 목표로 되돌리는 건 "실제로 전진에 성공했을 때만"
             # 위(is_blocked 확인 지점)에서 서서히 한다 — 여기서 depth
             # 예측만 보고 되돌렸다가 무한 진동한 버그가 있었다(위 주석 참고).
             self._last_action_was_forward = True
+            self._nav_probed_center = True
             return self._Action.MOVE_FORWARD
 
         # 정면이 막힘 — 옆으로 비켜갈 수 있는지 가까운 오프셋부터 확인.
@@ -562,16 +657,110 @@ class ExplorerPolicy:
                 self._last_action_was_forward = False
                 return self._Action.TURN_LEFT if off > 0 else self._Action.TURN_RIGHT
 
-        # 옆도 다 막힘 — 진짜 벽/구석일 가능성. bias를 우측으로 더 옮겨서
-        # (위 is_blocked 분기와 동일하게) 다음 틱에 그 방향을 실제로
-        # 테스트해보고, 그래도 안 되면 포기.
-        self.recover_attempts += 1
-        if self.recover_attempts > _RECOVER_MAX_ATTEMPTS:
+        # 정면 + 좌우(±15,±30) 전부 막힘 = 구석에 몰린 상태(실측 확인:
+        # 이 경우 15도씩 찔끔찔끔 돌면서 뚫린 틈을 찾을 때까지 방 안을
+        # 몇 백 틱씩 헤매는 것처럼 보였다 — 사용자 피드백: "이상하게
+        # 오른쪽으로 돌고... 벽에 계속 붙히쳐서". 실측으로 확인해보니 이
+        # 막힘의 정체가 실제로 "잠긴 문"(자물쇠 판)인 사례가 있었다 —
+        # 열쇠 없인 몇 번을 재시도해도 못 지나가므로, 자물쇠가 보이면
+        # 회전/재시도로 시간 낭비 말고 곧장 포기한다. 다만 색상 휴리스틱
+        # (lock_visible)만으로 exits에 "locked"를 확정하진 않는다 — 오탐
+        # 위험이 있어서다. 대신 SEEK을 잠깐 멈추고(HINT_CAPTURE) 문
+        # 터치 반경 안까지 다가가 힌트 배너(hint_banner_active, 100%
+        # 신뢰 가능)가 실제로 뜨는지로 최종 확인한다 — 뜨면 "locked"로
+        # 확정하고 힌트 텍스트도 같이 챙긴다(사용자 지시: 문 앞까지 가서
+        # 힌트 받고 원래 자리로 복귀). 같은 문에서 이미 한 번 시도했으면
+        # (_hint_captured_this_door) 재시도 없이 바로 포기한다.
+        if geo.lock_visible(obs):
+            if self.state == "SEEK" and not self._hint_captured_this_door:
+                return self._start_hint_capture()
             self._nav_bias_deg = 0.0
             return on_exhausted()
-        self._nav_bias_deg = geo.wrap180(self._nav_bias_deg - 15.0)
+
+        # 자물쇠가 아니면 사용자 지시대로 조금씩 돌지 말고 곧장 180도
+        # (뒤돌기)로 반응한다 — 최소한 지금 막힌 구석에서는 확실히
+        # 벗어나는 방향이라 다음 판단이 훨씬 빨리(적은 틱으로) 정리된다.
+        self.recover_attempts += 1
+        # 실측으로 새로 발견한 무한루프(dev_log.md): 180도로 등 돌려
+        # 방 안을 크게 돌다 보면 그 도중에 "실제로 전진 성공"이 여러 번
+        # 나오는데, 그때마다 recover_attempts가 0으로 리셋된다(바로 위
+        # is_blocked 분기의 설계 의도 — 나무 같은 국지 장애물을 지나가면
+        # 카운트를 지워야 하니까). 문제는 door_visible=True인데
+        # lock_visible=False인 좁은 문(자물쇠는 아니지만 15도 안전 콘보다
+        # 좁아 depth가 계속 "막힘"으로 오판하는 경우) 앞에서는, 방을 크게
+        # 돌아 결국 bias가 다시 0으로 수렴해 같은 문에 재접근 →
+        # 재충돌 → 다시 180도 회전, 을 recover_attempts가 한 번도 8을
+        # 못 넘긴 채 영원히 반복한다(실측: 600틱 넘게 같은 문 주변을
+        # 맴돎, 방 전환 전혀 없음). 그래서 "이번 목표 헤딩에서 통째로
+        # 몇 번이나 이 180도-포기를 겪었는지"는 중간의 성공적 전진으로
+        # 리셋되지 않는 별도 카운터로 센다.
+        self._nav_cornered_count += 1
+        if (self.recover_attempts > _RECOVER_MAX_ATTEMPTS
+                or self._nav_cornered_count > _MAX_CORNERED_PER_TARGET):
+            self._nav_bias_deg = 0.0
+            return on_exhausted()
+        self._nav_bias_deg = geo.wrap180(self._nav_bias_deg + 180.0)
         self._last_action_was_forward = False
         return self._Action.TURN_RIGHT
+
+    # --- HINT_CAPTURE: 잠긴 문 쪽으로 다가가 힌트 배너를 읽고 물러남 -----
+    def _start_hint_capture(self):
+        self._hint_capture_phase = "approach"
+        self._hint_capture_forward_steps = 0
+        self._hint_capture_confirmed_locked = False
+        self._hint_captured_this_door = True  # 성공 여부와 무관하게 한 번만 시도
+        self._hint_capture_return_state = self.state  # 보통 "SEEK"
+        self.state = "HINT_CAPTURE"
+        return self._Action.NO_OP
+
+    def _step_hint_capture(self, hud, obs):
+        A = self._Action
+        if self._hint_capture_phase == "approach":
+            if hint_banner_active(obs):
+                self._hint_capture_confirmed_locked = True
+                # 배너 텍스트는 처음 확보한 것만 채택 — 문이 여러 개라도
+                # 첫 힌트가 유효하다(재방문 시 다시 덮어쓰지 않음).
+                if self.scene.key_hint_text is None:
+                    text = read_hint_text(obs)
+                    if text:
+                        self.scene.key_hint_text = text
+                        self.scene.key_hint_room = self.seek_origin_room
+                        self.scene.key_hint_heading = self.target_heading
+                self._hint_capture_retreat_remaining = self._hint_capture_forward_steps
+                self._hint_capture_phase = "retreat"
+                return A.MOVE_BACK if self._hint_capture_forward_steps > 0 else self._finish_hint_capture()
+            if self._hint_capture_forward_steps >= _HINT_CAPTURE_MAX_APPROACH_TICKS:
+                # 터치 반경에 못 들어갔다(색 오탐이었거나 이미 열쇠를 들고
+                # 있어 배너 대신 바로 열렸을 수도 있음) — 포기하고 후퇴.
+                self._hint_capture_retreat_remaining = self._hint_capture_forward_steps
+                self._hint_capture_phase = "retreat"
+                return (A.MOVE_BACK if self._hint_capture_forward_steps > 0
+                        else self._finish_hint_capture())
+            self._hint_capture_forward_steps += 1
+            return A.MOVE_FORWARD
+
+        # retreat
+        if hint_banner_active(obs):
+            self._hint_capture_confirmed_locked = True
+            if self.scene.key_hint_text is None:
+                text = read_hint_text(obs)
+                if text:
+                    self.scene.key_hint_text = text
+                    self.scene.key_hint_room = self.seek_origin_room
+                    self.scene.key_hint_heading = self.target_heading
+        self._hint_capture_retreat_remaining -= 1
+        if self._hint_capture_retreat_remaining > 0:
+            return A.MOVE_BACK
+        return self._finish_hint_capture()
+
+    def _finish_hint_capture(self):
+        node = self.scene.nodes[self.seek_origin_room]
+        node.exits[self.target_heading] = (
+            "locked" if self._hint_capture_confirmed_locked else "wall"
+        )
+        self._hint_capture_phase = None
+        self.state = self._hint_capture_return_state or "SEEK"
+        return self._start_seek(self.seek_origin_room, node)
 
     def _on_seek_arrival(self, hud, new_room_canon):
         node = self.scene.nodes[self.seek_origin_room]
@@ -589,6 +778,8 @@ class ExplorerPolicy:
             self._nav_bias_deg = 0.0
             self._nav_fail_count = 0
             self._nav_action_queue = []
+            self._nav_probed_center = False
+            self._nav_cornered_count = 0
             self.state = "RETURN"
             return self._Action.NO_OP
 
@@ -612,6 +803,8 @@ class ExplorerPolicy:
         self._nav_bias_deg = 0.0
         self._nav_fail_count = 0
         self._nav_action_queue = []
+        self._nav_probed_center = False
+        self._nav_cornered_count = 0
         self.state = "RETURN"
         return self._Action.NO_OP
 
@@ -644,6 +837,8 @@ class ExplorerPolicy:
             self.recover_attempts = 0
             self._need_align = True
             self._last_action_was_forward = False
+            self._nav_probed_center = False
+            self._nav_cornered_count = 0
             return self._Action.MOVE_BACK
 
         def on_exhausted():
@@ -685,6 +880,24 @@ class ExplorerPolicy:
             return self._resume_after_flee()
 
         if not self.flee_sweep_active:
+            # 1순위: 근접 전용 방위 추정(enemies.close_range_bearing). 실측
+            # 확인(dev_log.md, seed=7): strike 진입 시점엔 적이 이미
+            # 1.3~1.5m 코앞이라 몸통이 화면을 거의 다 채워서, detect()의
+            # 사람형 비율/바닥접점 판정이 구조적으로 0개만 반환하고 매
+            # 전투가 곧장 24방향 sweep(최대 72틱)으로 빠졌다 — "예전처럼
+            # 즉각적으로 안 죽인다"는 원인. close_range_bearing은 사람형
+            # 판정 없이 "벽도 바닥도 아닌 큰 덩어리"만 보므로 이 거리에서도
+            # 먹힌다(이미 HP가 깎여 진입한 상태라 오탐 위험도 낮음).
+            bearing = EN.close_range_bearing(obs, wall_rgb=self._current_wall_rgb(hud))
+            if bearing is not None and self.flee_fastpath_attack_streak < _CLOSE_RANGE_ATTACK_STREAK_MAX:
+                if abs(bearing) <= _ATTACK_CONE_HALF_DEG:
+                    self.flee_ever_attacked = True
+                    self.flee_fastpath_attack_streak += 1
+                    return self._Action.ATTACK
+                return self._Action.TURN_LEFT if bearing > 0 else self._Action.TURN_RIGHT
+
+            # 2순위: 중간 거리용 사람형 탐지(위 1순위가 실패한 경우 —
+            # 예: 적이 아직 근접하기 전, 또는 방금 물러난 경우).
             mobs = EN.detect(obs, wall_rgb=self._current_wall_rgb(hud))
             best = next((m for m in mobs if m.score >= _MOB_MIN_SCORE
                          and m.distance <= _MOB_MAX_COMBAT_DIST_M), None)
@@ -703,13 +916,21 @@ class ExplorerPolicy:
                     return self._Action.MOVE_FORWARD
                 return self._Action.TURN_LEFT if best.bearing > 0 else self._Action.TURN_RIGHT
 
-            # CV로 못 찾으면 곧장 sweep으로(VLM 조준은 안 씀 — 위 주석 참고).
+            # 둘 다 못 찾으면 곧장 sweep으로(VLM 조준은 안 씀 — 위 주석 참고).
             self.flee_sweep_active = True
             self.flee_sweep_headings_done = 0
             self.flee_sweep_attacks_done = 0
+            # 이미 근접/중간거리 탐지로 명중까지 시켰던 상태에서 갑자기
+            # 못 찾은 거라면(위 _FLEE_SWEEP_QUICK_CHECK_HEADINGS 주석
+            # 참고) 죽어서 사라졌을 확률이 높으니 짧게만 확인한다.
+            self.flee_sweep_heading_limit = (
+                _FLEE_SWEEP_QUICK_CHECK_HEADINGS if self.flee_ever_attacked
+                else _FLEE_SWEEP_HEADINGS
+            )
 
-        # --- 결정론적 sweep: 공격 N번 → 15도 회전, 24번 반복 ---
-        if self.flee_sweep_headings_done >= _FLEE_SWEEP_HEADINGS:
+        # --- 결정론적 sweep: 공격 N번 → 15도 회전, 24번(또는 명중 후
+        # 놓친 경우는 짧게) 반복 ---
+        if self.flee_sweep_headings_done >= self.flee_sweep_heading_limit:
             return self._resume_after_flee()
         if self.flee_sweep_attacks_done < _FLEE_SWEEP_ATTACKS_PER_HEADING:
             self.flee_sweep_attacks_done += 1
@@ -747,6 +968,7 @@ class ExplorerPolicy:
         self.flee_sweep_active = False
         self.flee_sweep_headings_done = 0
         self.flee_sweep_attacks_done = 0
+        self.flee_sweep_heading_limit = _FLEE_SWEEP_HEADINGS
         self.flee_fastpath_attack_streak = 0
         self.state = self.pre_flee_state or "SURVEY"
         self.target_heading = self.pre_flee_target
@@ -757,4 +979,5 @@ class ExplorerPolicy:
         # (bias 낀) 방향으로 복귀하려 든다 — "적 죽이고 나서 제자리로
         # 안 돌아온다"는 실측 피드백의 원인(dev_log.md).
         self._nav_bias_deg = 0.0
+        self._nav_probed_center = False
         return self._Action.NO_OP
