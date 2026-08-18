@@ -137,6 +137,9 @@ class RoomNode:
     # 몸으로 부딪혀 확인한 벽. 스캔 판정만으로 벽이라 한 곳과 구분해서,
     # 탐색이 끝난 뒤 남는 시간에 다시 확인할 대상을 고른다.
     verified: set = field(default_factory=set)
+    # 이 방에서 확정한 벽 사진들(photos.Photo). 크롭·서명·캡션을 들고 있어
+    # QA에서 "그 방에 무슨 사진이 있었나"에 답하는 근거가 된다.
+    photos: List = field(default_factory=list)
 
     def open_dirs(self) -> List[str]:
         return [d for d in DIRS if self.walls[d] == DOOR]

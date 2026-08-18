@@ -31,6 +31,8 @@ from agent import keys as KEYS
 from agent import localize as L
 from agent import mapper as M
 from agent import motion as MOT
+from agent import photos as PH
+from agent import vlm as VLM
 from agent.perception import Percept, Perception
 from agent.pose import (ATTACK, MOVE_BACK, MOVE_FORWARD, NO_OP, TURN_LEFT,
                         TURN_RIGHT, PoseTracker)
@@ -121,6 +123,11 @@ class Explorer:
         self.trace = [] if trace else None
         self.perc = Perception()
         self.motion = MOT.MotionDetector()
+        # 벽 사진 기억. 캡션기는 key.env가 있을 때만 살아나고, 없으면 크롭과
+        # 서명만 남는다(둘 다 QA에서 쓸 수 있다). 생성 자체는 네트워크를
+        # 건드리지 않으므로 import/초기화가 느려지지 않는다.
+        self.captioner = VLM.Captioner()
+        self.photos = PH.PhotoCapture(captioner=self.captioner)
         self.map = M.WorldMap()
         self.pose = PoseTracker()
         self.step_i = 0
@@ -200,7 +207,7 @@ class Explorer:
             "enemies": [],        # 확정 사망한 적 (map.tracks가 원본)
         }
         self.stats = {"blocked": 0, "attacks": 0, "scans": 0, "transitions": 0,
-                      "looks": 0, "motion_hits": 0, "kills": 0}
+                      "looks": 0, "motion_hits": 0, "kills": 0, "photos": 0}
         self.state_steps: Dict[str, int] = {}   # 상태별 소요 스텝 (진단용)
         self._step_label = "BOOT"
 
@@ -775,6 +782,13 @@ class Explorer:
         if p.profile is not None and bucket not in self._scan_seen:
             self._scan_samples.append((self.pose.heading, p.profile))
             self._scan_seen.add(bucket)
+            # 방위마다 한 번만 액자를 찾는다. 매 스텝 돌리면 프레임당 ~2ms가
+            # 스캔 72스텝 내내 붙지만, 방위는 24개뿐이라 한 번씩이면 충분하다
+            # (같은 사진이 여러 방위에 걸치면 추적기가 최적 프레임을 고른다).
+            room = self.map.get(self.cur_cell)
+            self.photos.observe(
+                p.frame, self.step_i, self.cur_name or "?", self.pose.heading,
+                wall_rgb=(room.wall_color if room is not None else None))
         if p.wall_color:
             self._scan_colors.append(p.wall_color)
         if len(self._scan_seen) < SCAN_TURNS and self.step_i - self._scan_started < 900:
@@ -819,6 +833,25 @@ class Explorer:
         room.scanned = True
         if self._scan_colors:
             room.wall_color = max(set(self._scan_colors), key=self._scan_colors.count)
+        # 방을 다 돌았으니 진행 중인 액자 트랙을 확정하고 이 방에 붙인다.
+        # 방을 다시 스캔할 때 같은 사진이 또 붙지 않도록, 이미 방에 있는
+        # 것과 서명을 비교해서 거른다. PhotoCapture의 중복 제거는 pending
+        # 안에서만 도는데, 스캔이 끝날 때마다 pending을 방으로 비우기
+        # 때문에 재방문 시에는 비교 대상이 남아 있지 않다(실측: 사진 1장짜리
+        # 방에 같은 사진이 3장 쌓였다).
+        self.photos.flush(room.key, self.pose.heading, self.step_i)
+        for photo in self.photos.pending:
+            if photo.room_key != room.key:
+                continue
+            twin = next((q for q in room.photos
+                         if float(photo.sig @ q.sig) >= PH.DEDUP_COS), None)
+            if twin is None:
+                room.photos.append(photo)
+            elif photo.area > twin.area:
+                room.photos[room.photos.index(twin)] = photo
+        self.photos.pending = [q for q in self.photos.pending
+                               if q.room_key != room.key]
+        self.stats["photos"] = sum(len(r.photos) for r in self.map.rooms.values())
 
         self.memory["rooms"].setdefault(room.key, {}).update({
             "cell": list(self.cur_cell),
@@ -826,6 +859,7 @@ class Explorer:
             "walls": dict(room.walls),
             "scanned_step": self.step_i,
             "match_score": round(score, 2),
+            "photo_count": len(room.photos),
         })
 
     def _rays(self) -> List[Tuple[float, float]]:
