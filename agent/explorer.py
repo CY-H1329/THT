@@ -67,7 +67,23 @@
              넘어도) 끝나면 하던 일로 복귀 — 그 뒤 다시 HP가 깎이면(=아직
              살아있거나 두 번째 적) step() 최상단의 HP-드랍 감지가 새로
              FLEE를 트리거한다(자동으로 반복).
-  DONE     — 갈 수 있는 새 방을 다 찾음(도달 가능한 범위 완료).
+  GOTO_HINT— 힌트 문구가 가리키는 "열쇠가 있는 방"이 이미 가본 방들 중
+             하나로 특정되면, DFS 탐험을 잠시 멈추고 그 방까지
+             scene.shortest_path()로 최단 경로를 따라 이동한다(leg="key").
+             열쇠를 실제로 집으면([KEY] 태그) 같은 방식으로 잠긴 문이
+             있는 방으로 되돌아가 문에 걸어 들어가 연다(leg="door") —
+             그래야 "잠긴 문 뒤에 뭐가 있었나"를 답할 수 있다(README의
+             QA 카테고리). 새 지각 로직은 하나도 안 쓰고 기존
+             _navigate_step 이동 프리미티브만 재사용한다. 예산(틱 상한)을
+             넘거나 경로가 없으면 조용히 원래 DFS 탐험으로 복귀한다.
+  DONE     — 갈 수 있는 새 방을 다 찾음(도달 가능한 범위 완료). 이때는
+             제자리에 서 있지 않고 _default_wander로 계속 돌아다닌다
+             (남은 시간에 적을 만나 죽을 위험보다, 놓친 문/열쇠를 다시
+             만날 가능성이 QA 점수에 더 도움이 된다).
+
+행동 우선순위(_arbitrate): 도망/반격(FLEE) > 선제 공격 > 열쇠·문으로
+이동(GOTO_HINT) > 탐험(INIT/RECENTER/SURVEY/SEEK/HINT_CAPTURE/RETURN) >
+기본 배회(_default_wander).
 """
 
 from __future__ import annotations
@@ -75,6 +91,7 @@ from __future__ import annotations
 from agent import enemies as EN
 from agent import geometry as geo
 from agent.memory import SceneGraph, CARDINAL_HEADINGS
+from agent.hint_resolve import resolve_hint_room
 from agent.ocr import hint_banner_active, read_hint_text, read_hud
 from agent.palette import WALL_PALETTE
 from agent.vision import is_blocked, sample_wall_color
@@ -153,6 +170,17 @@ _FLEE_STRIKE_MAX_TICKS = (             # 안전 상한: VLM 조준 실패 후 sw
 _FLEE_VLM_MAX_CALLS = VLM_MAX_CALLS_PER_EPISODE  # 전투 조준 + 막힌 방향 VLM 확인이 이 예산을 공유
 
 
+# _arbitrate에서 "탐험 계열"로 묶어 _dispatch에 넘기는 상태들.
+_EXPLORE_STATES = ("INIT", "RECENTER", "SURVEY", "SEEK", "HINT_CAPTURE", "RETURN")
+
+# GOTO_HINT 안전 상한: 열쇠/문으로 가는 여정 하나가 이 틱을 넘으면 뭔가
+# 잘못된 것이므로(길이 막혔거나 방 이름 오독) 조용히 탐험으로 복귀한다.
+_GOTO_MAX_TICKS = 400
+# 열쇠 방에 도착한 뒤, 열쇠를 실제로 밟기 위해 방 안을 훑는 예산.
+# 열쇠 획득은 자동(README)이라 그 위를 지나가기만 하면 된다.
+_GOTO_SWEEP_MAX_TICKS = 120
+
+
 def _heading_diff(a: int, b: int) -> int:
     """b - a를 [-180, 180]로 정규화. TURN_RIGHT는 헤딩을 줄이고 TURN_LEFT는
     늘리므로(실측 확인됨), 양수(목표가 더 큼)면 TURN_LEFT, 음수면
@@ -219,6 +247,25 @@ class ExplorerPolicy:
         self._hint_capture_confirmed_locked = False  # 배너가 실제로 떴는지
         self._hint_captured_this_door = False  # 같은 문에서 재시도 방지
 
+        # GOTO_HINT(열쇠 방 -> 잠긴 문): agent/__init__.py가 ContentIngest의
+        # ContentDB를 여기 꽂아준다. None이면(단독 실행 등) 이 기능은 그냥
+        # 꺼진 채로 동작한다 — 탐험 자체는 전혀 영향받지 않는다.
+        self.content_db = None
+        self.goto_target_room = None
+        self.goto_leg = None          # None | "key" | "door"
+        self.goto_ticks = 0
+        self.goto_sweep_ticks = 0
+        self.goto_prev_room = None
+        self._goto_key_attempted = False
+        self._goto_door_attempted = False
+        self.key_was_held = False
+        self.door_unlocked = False
+        # 이번 틱의 적 탐지 결과(agent.content_ingest가 "적이 보이는
+        # 프레임"을 VLM에 같이 보낼지 고를 때 재사용 — 같은 프레임에
+        # EN.detect를 두 번 돌리지 않기 위함).
+        self.last_mobs = []
+        self._wander_heading = None
+
     # HUD OCR은 프레임당 ~140ms(글리프 템플릿 매칭)로 압도적인 병목이었다
     # (dev_log.md 실측: EN.detect 1.6ms/depth_profile 1.4ms와 비교해 100배).
     # 근데 HUD 바 픽셀은 방 이름/HP/방향이 안 바뀌는 대부분의 틱에서 완전히
@@ -235,47 +282,98 @@ class ExplorerPolicy:
     # --- 메인 진입점 ------------------------------------------------
     def step(self, obs):
         hud = self._read_hud_cached(obs)
+        self._note_hud_transitions(hud)
+        action = self._arbitrate(hud, obs)
+        self.prev_frame = obs
+        return int(action)
 
-        # 매 스텝 공통: HP 하락 감지 (화면에 뭐가 보이든 최우선으로 반응).
-        # 후진해도 적과의 거리가 안 벌어진다는 게 실측 확인됐으므로(위 상단
-        # 주석 참고), 맞은 그 자리에서 바로 VLM 조준으로 대응한다. 이미
-        # FLEE 중에 또 맞은 거면(전투가 계속 이어지는 중) 진행 중인
-        # sweep/조준 상태를 리셋하지 않는다 — 예전엔 매번 리셋해서 sweep이
-        # 절대 끝까지 못 돌았던 버그가 있었음(dev_log.md).
-        if hud.ok and hud.hp is not None:
-            if self.last_hp is not None and hud.hp < self.last_hp and self.state != "FLEE":
-                self.pre_flee_state = self.state
-                self.pre_flee_target = self.target_heading
-                self.state = "FLEE"
-                self.flee_phase = "strike"
-                self.flee_ticks = 0
-                self.flee_ever_attacked = False
-                self.flee_sweep_active = False
-                self.flee_sweep_headings_done = 0
-                self.flee_sweep_attacks_done = 0
-                self.flee_sweep_heading_limit = _FLEE_SWEEP_HEADINGS
-                self.flee_fastpath_attack_streak = 0
-            self.last_hp = hud.hp
-
+    # 행동 우선순위를 한눈에 보이게 모아둔 함수. 각 분기는 이미 검증된
+    # 기존 로직을 그대로 부르는 껍데기다 — FLEE/공격/탐험의 실제 동작은
+    # 리팩터링 전과 동일하고, 바뀐 건 (1) GOTO_HINT가 3순위로 새로 끼었고
+    # (2) DONE에서 제자리 회전 대신 배회로 떨어진다는 두 가지뿐이다.
+    def _arbitrate(self, hud, obs):
+        # 1) 맞았으면(HP 하락) 그 자리에서 즉시 반격 — 무조건 최우선.
         if self.state == "FLEE":
-            action = self._step_flee(hud, obs)
-            self.prev_frame = obs
-            return int(action)
+            return self._step_flee(hud, obs)
 
-        # 선제 공격: 지금까진 HP가 깎여야만(=한 대 맞아야만) 전투를 시작해서
-        # "적을 보고도 안 죽이고 맞고 나서야 죽인다"는 실측 피드백이 있었다
-        # (사용자 지시). agent.enemies는 이미 프레임당 ~1~2ms라 매 틱 상시
-        # 돌려도 예산에 거의 안 걸리므로, FLEE 중이 아닐 때도 매 틱 확인해서
-        # 콘·사거리 안에 적이 있으면 하던 일(탐험 상태)은 그대로 둔 채
-        # 그 한 틱만 공격으로 가로챈다.
-        # 실측으로 확인된 버그(dev_log.md): 안전장치 없이 매 틱 이 조건이면
-        # 무조건 가로채니까, 죽지 않는 대상(오탐이거나, 실제 명중이 안 되는
-        # 경우)을 만나면 완전히 같은 자리에서 ATTACK만 영원히 반복하며
-        # 탐험이 통째로 멈췄다(seed=1, 60틱 넘게 위치/각도 고정). 적 HP가
-        # 최대 4라 몇 방이면 죽어야 정상이므로, 이 이상 연속되면 오탐/명중
-        # 실패로 보고 이번 틱은 하던 일(탐험)을 계속하게 양보한다 — 진짜
-        # 적이면 언젠가 다시 맞고 정식 FLEE(sweep 포함) 경로로 넘어간다.
+        # 2) 선제 공격: 콘·사거리 안에 적이 보이면 하던 일은 그대로 둔 채
+        #    그 한 틱만 가로챈다.
+        attack = self._attack_should_engage(hud, obs)
+        if attack is not None:
+            return attack
+
+        # 3) HUD를 못 읽었거나 복도(방 이름 없음) — 방에 도착할 때까지 전진.
+        if not hud.ok or hud.room_name is None:
+            return self._Action.MOVE_FORWARD
+
+        # 4) 열쇠/잠긴 문으로 이동 중이면 탐험보다 우선.
+        if self.state == "GOTO_HINT":
+            return self._step_goto_hint(hud, obs)
+
+        # 5) 탐험(DFS) 계열.
+        if self.state in _EXPLORE_STATES:
+            return self._dispatch(hud, obs)
+
+        # 6) 그 외(DONE 등) — 벽을 피하며 계속 돌아다닌다.
+        return self._default_wander(hud, obs)
+
+    def _note_hud_transitions(self, hud):
+        """매 스텝 공통: HP 하락 감지(FLEE 트리거)와 [KEY] 태그 전이 기록.
+
+        후진해도 적과의 거리가 안 벌어진다는 게 실측 확인됐으므로(파일
+        상단 주석 참고), 맞은 그 자리에서 바로 조준으로 대응한다. 이미
+        FLEE 중에 또 맞은 거면(전투가 계속 이어지는 중) 진행 중인
+        sweep/조준 상태를 리셋하지 않는다 — 예전엔 매번 리셋해서 sweep이
+        절대 끝까지 못 돌았던 버그가 있었음(dev_log.md).
+        """
+        if not (hud.ok and hud.hp is not None):
+            return
+        if self.last_hp is not None and hud.hp < self.last_hp and self.state != "FLEE":
+            self.pre_flee_state = self.state
+            self.pre_flee_target = self.target_heading
+            self.state = "FLEE"
+            self.flee_phase = "strike"
+            self.flee_ticks = 0
+            self.flee_ever_attacked = False
+            self.flee_sweep_active = False
+            self.flee_sweep_headings_done = 0
+            self.flee_sweep_attacks_done = 0
+            self.flee_sweep_heading_limit = _FLEE_SWEEP_HEADINGS
+            self.flee_fastpath_attack_streak = 0
+        self.last_hp = hud.hp
+
+        # [KEY] 태그가 켜졌다 꺼지면 = 열쇠를 써서 문이 열린 것(README).
+        if self.key_was_held and not hud.has_key:
+            self.door_unlocked = True
+        self.key_was_held = hud.has_key
+
+    def _attack_should_engage(self, hud, obs):
+        """콘·사거리 안에 적이 있으면 Action.ATTACK, 아니면 None.
+
+        선제 공격: 지금까진 HP가 깎여야만(=한 대 맞아야만) 전투를 시작해서
+        "적을 보고도 안 죽이고 맞고 나서야 죽인다"는 실측 피드백이 있었다
+        (사용자 지시). agent.enemies는 이미 프레임당 ~1~2ms라 매 틱 상시
+        돌려도 예산에 거의 안 걸리므로, FLEE 중이 아닐 때도 매 틱 확인해서
+        콘·사거리 안에 적이 있으면 하던 일(탐험 상태)은 그대로 둔 채
+        그 한 틱만 공격으로 가로챈다.
+        실측으로 확인된 버그(dev_log.md): 안전장치 없이 매 틱 이 조건이면
+        무조건 가로채니까, 죽지 않는 대상(오탐이거나, 실제 명중이 안 되는
+        경우)을 만나면 완전히 같은 자리에서 ATTACK만 영원히 반복하며
+        탐험이 통째로 멈췄다(seed=1, 60틱 넘게 위치/각도 고정). 적 HP가
+        최대 4라 몇 방이면 죽어야 정상이므로, 이 이상 연속되면 오탐/명중
+        실패로 보고 이번 틱은 하던 일(탐험)을 계속하게 양보한다 — 진짜
+        적이면 언젠가 다시 맞고 정식 FLEE(sweep 포함) 경로로 넘어간다.
+
+        "사거리 밖 적을 멈춰서 지켜보다 다가오면 공격" 로직을 시도했다가
+        실측으로 되돌렸다(dev_log.md) — 이 게임은 후진해도 적과의 거리가
+        안 벌어진다는 게 이미 확인된 사실이라, 멈춰서 기다리든 탐험을
+        계속하든 "언젠가 다가와서 맞는" 타이밍 자체는 거의 안 바뀐다.
+        대신 멈춰서 지켜보는 동안 탐험 진행이 완전히 멎어서, 적이 많은
+        방에 계속 묶여 있다가 반복 교전으로 죽는 결과가 났다(seed=7:
+        640스텝만에 사망 vs 껐을 때 4000스텝 끝까지 생존, 직접 A/B).
+        """
         mobs = EN.detect(obs, wall_rgb=self._current_wall_rgb(hud) if hud.ok else None)
+        self.last_mobs = mobs
         best = next((m for m in mobs if m.score >= _MOB_MIN_SCORE
                      and m.distance <= _MOB_MAX_COMBAT_DIST_M), None)
         if (best is not None and abs(best.bearing) <= _ATTACK_CONE_HALF_DEG
@@ -283,29 +381,39 @@ class ExplorerPolicy:
                 and self._proactive_attack_streak < _FASTPATH_ATTACK_STREAK_MAX):
             self._proactive_attack_streak += 1
             self._last_action_was_forward = False  # 하던 상태의 is_blocked 계산이 꼬이지 않게
-            self.prev_frame = obs
-            return int(self._Action.ATTACK)
+            return self._Action.ATTACK
         self._proactive_attack_streak = 0
+        return None
 
-        # "사거리 밖 적을 멈춰서 지켜보다 다가오면 공격" 로직을 시도했다가
-        # 실측으로 되돌렸다(dev_log.md) — 이 게임은 후진해도 적과의 거리가
-        # 안 벌어진다는 게 이미 확인된 사실이라, 멈춰서 기다리든 탐험을
-        # 계속하든 "언젠가 다가와서 맞는" 타이밍 자체는 거의 안 바뀐다.
-        # 대신 멈춰서 지켜보는 동안 탐험 진행(다음 문 찾기 등)이 완전히
-        # 멎어서, 적이 많은 방(Coral Vault 등)에 에이전트가 계속 묶여
-        # 있다가 반복 교전으로 죽는 결과가 났다(같은 seed=7: 이 로직
-        # 켰을 때 640스텝만에 사망 vs 껐을 때 4000스텝 끝까지 생존,
-        # 직접 A/B로 확인). 그래서 사거리 밖 적은 그냥 무시하고 하던
-        # 탐험을 계속하며, 실제로 맞으면(HP 하락) 그때 FLEE로 반응한다.
+    # --- 기본 배회(우선순위 최하위) --------------------------------------
+    # 탐험이 끝난(DONE) 뒤의 폴백. 예전엔 제자리에서 계속 회전만 했는데,
+    # 그건 남은 시간을 통째로 버리는 것과 같다. 목표 헤딩을 "지금 보고 있는
+    # 방향"으로 두고 검증된 _navigate_step(전진 -> 막히면 옆으로 우회 ->
+    # 구석이면 180도)을 그대로 돌리면, 새 지각 로직 없이 "벽을 피하며 계속
+    # 걷는다"가 된다. 완전히 막히면 목표를 90도 틀어 다시 시도한다.
+    def _default_wander(self, hud, obs):
+        if not hud.ok or hud.heading is None:
+            return self._Action.MOVE_FORWARD
+        if self._wander_heading is None:
+            self._wander_heading = int(hud.heading) % 360
 
-        if not hud.ok or hud.room_name is None:
-            # HUD 못 읽음/복도(방 이름 없음) — 그냥 전진해서 방에 도착하길 기다림.
-            self.prev_frame = obs
-            return int(self._Action.MOVE_FORWARD)
+        def on_exhausted():
+            self._wander_heading = (self._wander_heading + 90) % 360
+            self._reset_nav_state()
+            return self._Action.TURN_RIGHT
 
-        action = self._dispatch(hud, obs)
-        self.prev_frame = obs
-        return int(action)
+        return self._navigate_step(hud, obs, self._wander_heading, on_exhausted)
+
+    def _reset_nav_state(self):
+        """_navigate_step이 쓰는 임시 상태를 초기화(목표를 새로 잡을 때)."""
+        self.recover_attempts = 0
+        self._need_align = True
+        self._last_action_was_forward = False
+        self._nav_bias_deg = 0.0
+        self._nav_fail_count = 0
+        self._nav_action_queue = []
+        self._nav_probed_center = False
+        self._nav_cornered_count = 0
 
     def _dispatch(self, hud, obs):
         if self.state == "INIT":
@@ -320,8 +428,7 @@ class ExplorerPolicy:
             return self._step_hint_capture(hud, obs)
         if self.state == "RETURN":
             return self._step_return(hud, obs)
-        if self.state == "DONE":
-            return self._Action.TURN_RIGHT  # 더 갈 새 방 없음 — 제자리 대기
+        # DONE/GOTO_HINT는 _arbitrate가 직접 처리한다(여기 오지 않음).
         return self._enter_room(hud, entry_heading=None, parent=None)
 
     # --- 방 이름 정규화 (말줄임표로 잘린 것 병합, dev_log.md 참고) -----
@@ -470,6 +577,11 @@ class ExplorerPolicy:
         colors = [c for c in self.survey_samples.values() if c]
         if colors and node.wall_color is None:
             node.wall_color = max(set(colors), key=colors.count)
+        # 방 하나를 다 훑을 때마다, 지금까지 본 방들로 힌트가 풀리는지
+        # 다시 확인한다(Phase 4) — 풀리면 DFS를 잠시 멈추고 그 방으로.
+        goto = self._maybe_start_goto(canon)
+        if goto is not None:
+            return goto
         return self._start_seek(canon, node)
 
     # --- SEEK: 후보 방향으로 전진, 막히면 회피, 문 찾으면 진입 ------------
@@ -761,6 +873,187 @@ class ExplorerPolicy:
         self._hint_capture_phase = None
         self.state = self._hint_capture_return_state or "SEEK"
         return self._start_seek(self.seek_origin_room, node)
+
+    # --- GOTO_HINT: 열쇠 방 -> 잠긴 문 (기존 이동 프리미티브만 재사용) ---
+    def _locked_door_room(self):
+        """잠긴 문이 있는 방. 힌트 배너를 실제로 띄운 위치가 1순위 근거이고,
+        없으면 exits에 "locked"로 확정된 방을 찾는다."""
+        if self.scene.key_hint_room:
+            return self.scene.key_hint_room
+        for name, node in self.scene.nodes.items():
+            if any(st == "locked" for st in node.exits.values()):
+                return name
+        return None
+
+    def _locked_door_heading(self, room):
+        if room == self.scene.key_hint_room and self.scene.key_hint_heading is not None:
+            return self.scene.key_hint_heading
+        node = self.scene.nodes.get(room)
+        if node is None:
+            return None
+        for heading, status in node.exits.items():
+            if status == "locked":
+                return heading
+        return None
+
+    def _resolve_key_room(self):
+        """힌트 문구 + 지금까지의 관측 -> 열쇠가 있는 방 이름(없으면 None).
+
+        CV로 이미 잰 방 벽 색을 ContentDB에 먼저 채워 넣는다 — VLM 응답이
+        아직 안 온 방도 "…walls" 템플릿 힌트에는 바로 답할 수 있게.
+        """
+        if self.content_db is None or not self.scene.key_hint_text:
+            return None
+        for name, node in list(self.scene.nodes.items()):
+            if not node.wall_color:
+                continue
+            rec = self.content_db.get_or_create(name)
+            if rec.wall_color.value is None:
+                rec.wall_color.value = node.wall_color
+                rec.wall_color.confidence = 0.9
+        return resolve_hint_room(self.scene.key_hint_text, self.content_db)
+
+    def _maybe_start_goto(self, canon):
+        """서베이 직후 호출 — 지금 GOTO_HINT로 전환할 이유가 있으면 그
+        첫 액션을, 없으면 None을 반환한다."""
+        if self.door_unlocked:
+            return None
+        # 이미 열쇠를 들고 있다 -> 잠긴 문으로 가서 연다.
+        if self.key_was_held and not self._goto_door_attempted:
+            door_room = self._locked_door_room()
+            if (door_room and self._locked_door_heading(door_room) is not None
+                    and self.scene.shortest_path(canon, door_room) is not None):
+                return self._start_goto(door_room, "door")
+        # 아직 열쇠가 없다 -> 힌트가 가리키는 방이 특정되면 그리로.
+        if not self.key_was_held and not self._goto_key_attempted:
+            target = self._resolve_key_room()
+            if target and self.scene.shortest_path(canon, target) is not None:
+                return self._start_goto(target, "key")
+        return None
+
+    def _start_goto(self, target_room, leg):
+        self.goto_target_room = target_room
+        self.goto_leg = leg
+        self.goto_ticks = 0
+        self.goto_sweep_ticks = 0
+        self.goto_prev_room = None
+        self._wander_heading = None
+        if leg == "key":
+            self._goto_key_attempted = True
+        else:
+            self._goto_door_attempted = True
+        self._reset_nav_state()
+        self.target_heading = None
+        self.state = "GOTO_HINT"
+        return self._Action.NO_OP
+
+    def _step_goto_hint(self, hud, obs):
+        self.goto_ticks += 1
+        if self.goto_ticks > _GOTO_MAX_TICKS or self.goto_target_room is None:
+            return self._resume_after_goto(hud)
+
+        canon = self._canonicalize(hud.room_name) if hud.room_name else None
+        if canon is None:
+            return self._Action.MOVE_FORWARD  # 복도 — 계속 전진
+
+        if canon not in self.scene.nodes:
+            # 처음 보는 방 = 방금 잠긴 문을 열고 들어왔거나, 이동 중 우연히
+            # 새 방을 찾은 것. 어느 쪽이든 그래프에 정식으로 등록하고
+            # 평소 탐험 루틴(RECENTER->SURVEY)으로 넘긴다 — "잠긴 문 뒤에
+            # 뭐가 있었나"를 답하려면 이 등록이 반드시 필요하다.
+            parent = self.goto_prev_room
+            entry = None
+            if hud.heading is not None:
+                entry = min(CARDINAL_HEADINGS,
+                            key=lambda h: abs(_heading_diff(h, hud.heading)))
+            self.goto_leg = None
+            self.goto_target_room = None
+            # 그래프를 가로질러 온 뒤라 DFS 스택이 실제 위치와 어긋나 있다.
+            # 새 방을 push하기 전에 "루트 -> 직전 방"으로 다시 세워야
+            # 이후 backtrack이 엉뚱한 방으로 되돌아가지 않는다.
+            if parent and parent in self.scene.nodes:
+                self._rebuild_stack(parent)
+            return self._enter_room(hud, entry_heading=entry, parent=parent)
+
+        self.goto_prev_room = canon
+
+        # 문이 열린 뒤 목적지 방을 벗어났으면 여정 끝 — 탐험으로 복귀.
+        if self.goto_leg == "door" and self.door_unlocked and canon != self.goto_target_room:
+            return self._resume_after_goto(hud)
+
+        if canon == self.goto_target_room:
+            if self.goto_leg == "key":
+                if self.key_was_held:
+                    door_room = self._locked_door_room()
+                    if (door_room and self._locked_door_heading(door_room) is not None
+                            and self.scene.shortest_path(canon, door_room) is not None):
+                        return self._start_goto(door_room, "door")
+                    return self._resume_after_goto(hud)
+                # 열쇠 방에 도착 — 열쇠를 밟으려면 방 안을 돌아다녀야 한다
+                # (README: 획득은 자동, 그 위를 지나가기만 하면 됨).
+                self.goto_sweep_ticks += 1
+                if self.goto_sweep_ticks > _GOTO_SWEEP_MAX_TICKS:
+                    return self._resume_after_goto(hud)
+                return self._default_wander(hud, obs)
+            return self._step_goto_door(hud, obs)
+
+        path = self.scene.shortest_path(canon, self.goto_target_room)
+        if not path:
+            return self._resume_after_goto(hud)
+        heading = path[0]
+        if heading != self.target_heading:
+            self.target_heading = heading
+            self._reset_nav_state()
+        return self._navigate_step(hud, obs, heading,
+                                    lambda: self._resume_after_goto(hud))
+
+    def _step_goto_door(self, hud, obs):
+        """잠긴 문이 있는 방에 도착 — 그 방향으로 걸어 들어가면 자동으로
+        열린다(README). 열린 뒤에도 계속 전진해서 그 너머 방까지 들어간다."""
+        heading = self._locked_door_heading(self.goto_target_room)
+        if heading is None:
+            return self._resume_after_goto(hud)
+        if heading != self.target_heading:
+            self.target_heading = heading
+            self._reset_nav_state()
+        return self._navigate_step(hud, obs, heading,
+                                    lambda: self._resume_after_goto(hud))
+
+    def _resume_after_goto(self, hud):
+        """여정 종료(성공/포기 무관) — DFS 스택을 지금 위치 기준으로 다시
+        세우고 평소 탐험으로 복귀한다."""
+        self.goto_leg = None
+        self.goto_target_room = None
+        self._reset_nav_state()
+        canon = self._canonicalize(hud.room_name) if hud.room_name else None
+        if canon and canon in self.scene.nodes:
+            self._rebuild_stack(canon)
+            node = self.scene.nodes[canon]
+            if node.done:
+                return self._start_backtrack(canon)
+            return self._start_seek(canon, node)
+        # 복도 등 — 다음 틱에 방에 도착하면 INIT이 정상 등록한다.
+        self.state = "INIT"
+        return self._Action.MOVE_FORWARD
+
+    def _rebuild_stack(self, canon):
+        """GOTO_HINT로 그래프를 가로질러 이동한 뒤에는 DFS 스택(백트랙
+        경로)이 실제 위치와 어긋난다. 루트에서 지금 방까지의 최단 경로로
+        스택을 다시 만들어, 이후 backtrack이 정상적인 부모 방으로
+        되돌아가게 한다."""
+        root = self.scene.visited_order[0] if self.scene.visited_order else canon
+        stack = [(root, None)]
+        path = self.scene.shortest_path(root, canon) or []
+        cur = root
+        for heading in path:
+            nxt = self.scene.nodes[cur].exit_leads_to.get(heading)
+            if nxt is None:
+                break
+            stack.append((nxt, heading))
+            cur = nxt
+        if stack[-1][0] != canon:
+            stack.append((canon, None))
+        self.scene.stack = stack
 
     def _on_seek_arrival(self, hud, new_room_canon):
         node = self.scene.nodes[self.seek_origin_room]

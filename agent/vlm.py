@@ -122,7 +122,9 @@ _TASK_INSTRUCTIONS = (
     "(e.g. a barrel, chair, tree). The yellow door panel with a padlock "
     "icon is NOT an object — it's the locked door (report it via "
     "has_locked_door instead). If you can't concretely name what a shape "
-    "is, leave it out rather than using a vague label.\n\n"
+    "is, leave it out rather than using a vague label. Also give each "
+    "object's dominant color as a plain color word (e.g. 'red', 'brown'), "
+    "or null if it is multi-colored or you cannot tell.\n\n"
     "If a yellow-bordered hint banner with text is visible in any frame, "
     "transcribe it verbatim into hint_text."
 )
@@ -163,9 +165,14 @@ _SCHEMA = {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
+                    # README가 QA 카테고리로 "what color a particular object
+                    # was"를 명시해서 색을 따로 받는다(적에만 색 필드가
+                    # 있었음). strict 스키마라 required에도 넣되, 색을
+                    # 확신 못 하면 null을 주도록 프롬프트에서 안내한다.
+                    "color": {"type": ["string", "null"]},
                     "confidence": {"type": "number"},
                 },
-                "required": ["name", "confidence"],
+                "required": ["name", "color", "confidence"],
                 "additionalProperties": False,
             },
         },

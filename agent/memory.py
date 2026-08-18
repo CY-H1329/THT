@@ -70,6 +70,41 @@ class SceneGraph:
     def add_edge(self, a: str, b: str) -> None:
         self.edges.add(frozenset({a, b}))
 
+    def shortest_path(self, src: str, dst: str) -> Optional[List[int]]:
+        """src 방에서 dst 방까지 지나가야 할 "출구 헤딩"들의 목록을 BFS로 찾는다.
+
+        edges(무향 집합)가 아니라 nodes[*].exit_leads_to(방향까지 붙어있는
+        인접 정보)로 탐색한다 — 실제로 걸어가려면 "어느 방향으로 나가야
+        하는지"가 필요하기 때문이다. 반환값 [0, 270]은 "src에서 동쪽으로
+        나가고, 그 다음 방에서 북쪽으로 나가면 dst"라는 뜻.
+        src == dst면 빈 리스트, 길이 없으면 None.
+
+        exit_leads_to는 실제로 걸어서 통과한 문에만 채워지므로(explorer의
+        _on_seek_arrival/_enter_room), 여기서 나온 경로는 이미 한 번
+        지나가 본 적 있는 길만으로 구성된다 — 즉 GOTO_HINT가 미지의 문을
+        뚫어보라고 시키는 일이 없다.
+        """
+        if src == dst:
+            return []
+        if src not in self.nodes or dst not in self.nodes:
+            return None
+        # (방 이름, 여기까지 오는 헤딩 목록)
+        queue: List[tuple] = [(src, [])]
+        seen = {src}
+        while queue:
+            name, path = queue.pop(0)
+            node = self.nodes.get(name)
+            if node is None:
+                continue
+            for heading, nxt in node.exit_leads_to.items():
+                if nxt in seen:
+                    continue
+                if nxt == dst:
+                    return path + [heading]
+                seen.add(nxt)
+                queue.append((nxt, path + [heading]))
+        return None
+
     @property
     def current(self) -> Optional[RoomNode]:
         if not self.stack:
