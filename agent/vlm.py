@@ -500,3 +500,49 @@ def classify_heading(frame: np.ndarray, api_key: Optional[str] = None,
     """
     return _call_vlm_json(frame, _HEADING_CHECK_PROMPT, _HEADING_CHECK_SCHEMA,
                            "classify_heading", api_key, timeout)
+
+
+# VLM_RECOVER: 룰베이스 탐험(RECENTER/SURVEY/SEEK/RETURN)이 같은 행동을
+# 반복하는데 화면도 안 바뀌면(=제자리에서 맴돔) 룰베이스를 잠깐 멈추고
+# VLM에게 매 틱 이미지를 보여주며 직접 조종을 맡긴다(사용자 지시). 목표는
+# "방의 트인 중앙 쪽으로 이동"으로 고정 — 방 중앙 자체는 도착 판정이
+# 애매하므로, VLM 스스로 "막힘에서 벗어나 트인 곳에 도달했다"고 판단하면
+# 그렇게 보고하게 하고, 그러면 룰베이스로 복귀한다.
+_RECOVER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reached_open_area": {"type": "boolean"},
+        "action": {"type": ["string", "null"],
+                   "enum": ["turn_left", "turn_right", "move_forward", "move_back", None]},
+        "reasoning": {"type": "string"},
+    },
+    "required": ["reached_open_area", "action", "reasoning"],
+    "additionalProperties": False,
+}
+
+_RECOVER_PROMPT = (
+    "One frame from a first-person 3D game. A rule-based navigation "
+    "script has been repeating the same action without the view changing "
+    "-- it's stuck (likely wedged against a wall, corner, or obstacle). "
+    "You are taking over movement for a few steps. The goal is simply to "
+    "get the agent moving again toward the open, walkable center of the "
+    "room it's currently in (away from walls/corners/clutter), not to "
+    "reach any door or exit. If the view already shows reasonably open "
+    "space ahead with room to move (no wall or obstacle filling the "
+    "frame up close), set reached_open_area=true and action=null -- "
+    "control will be handed back to the rule-based script. Otherwise set "
+    "reached_open_area=false and pick exactly one action (turn_left, "
+    "turn_right, move_forward, move_back) that best helps it get "
+    "unstuck. Answer only the JSON fields, no extra text."
+)
+
+
+def recover_action(frame: np.ndarray, api_key: Optional[str] = None,
+                    timeout: float = 3.0) -> VlmResult:
+    """제자리 맴돌기(정체) 감지 시 매 틱 호출 — 트인 곳으로 벗어날 때까지
+    VLM이 직접 액션을 하나씩 골라준다. ok=False(네트워크 실패 등)면
+    호출자가 즉시 룰베이스로 복귀하면 된다(이 기능 자체가 안전망이라,
+    실패해도 원래 동작으로 돌아가면 그만 — 더 물러날 곳이 없음).
+    """
+    return _call_vlm_json(frame, _RECOVER_PROMPT, _RECOVER_SCHEMA,
+                           "recover_action", api_key, timeout)

@@ -60,6 +60,9 @@ class SceneGraph:
         self.key_hint_text: Optional[str] = None
         self.key_hint_room: Optional[str] = None
         self.key_hint_heading: Optional[int] = None
+        # 힌트 텍스트를 방 기록(wall_color 등)과 대조해 추정한 "열쇠가
+        # 있을 것 같은 방" — 아직 실제로 못 찾았으면 None.
+        self.key_target_room: Optional[str] = None
 
     def get_or_create(self, name: str) -> RoomNode:
         if name not in self.nodes:
@@ -69,6 +72,33 @@ class SceneGraph:
 
     def add_edge(self, a: str, b: str) -> None:
         self.edges.add(frozenset({a, b}))
+
+    def find_path(self, start: str, target: str) -> Optional[List[tuple]]:
+        """start에서 target까지, 실제로 확인된 문(exit_leads_to)만 타고
+        가는 최단 경로를 [(현재 방 이름, 나갈 heading), ...] 순서로 반환.
+        각 홉에서 그 heading으로 나가면 다음 방(또는 마지막이면 target)에
+        도착한다. 경로가 없으면 None, start==target이면 빈 리스트."""
+        if start == target:
+            return []
+        if start not in self.nodes:
+            return None
+        from collections import deque
+        visited = {start}
+        queue = deque([(start, [])])
+        while queue:
+            room, path = queue.popleft()
+            node = self.nodes.get(room)
+            if node is None:
+                continue
+            for heading, dest in node.exit_leads_to.items():
+                if dest in visited:
+                    continue
+                new_path = path + [(room, heading)]
+                if dest == target:
+                    return new_path
+                visited.add(dest)
+                queue.append((dest, new_path))
+        return None
 
     @property
     def current(self) -> Optional[RoomNode]:

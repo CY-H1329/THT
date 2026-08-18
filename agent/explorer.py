@@ -78,7 +78,7 @@ from agent.memory import SceneGraph, CARDINAL_HEADINGS
 from agent.ocr import hint_banner_active, read_hint_text, read_hud
 from agent.palette import WALL_PALETTE
 from agent.vision import is_blocked, sample_wall_color
-from agent.vlm import classify_heading, locate_door, locate_enemy
+from agent.vlm import classify_heading, locate_door, locate_enemy, recover_action
 from agent.config import VLM_MAX_CALLS_PER_EPISODE
 
 _WALL_RGB_BY_NAME = dict(WALL_PALETTE)
@@ -152,6 +152,21 @@ _FLEE_STRIKE_MAX_TICKS = (             # 안전 상한: VLM 조준 실패 후 sw
 )
 _FLEE_VLM_MAX_CALLS = VLM_MAX_CALLS_PER_EPISODE  # 전투 조준 + 막힌 방향 VLM 확인이 이 예산을 공유
 
+# VLM_RECOVER: 같은 액션을 이만큼 연속으로 냈는데(그리고 그동안 화면도
+# 거의 안 바뀌었으면) "제자리에서 맴돈다"고 보고 VLM에게 잠깐 조종을
+# 맡긴다(사용자 지시). 너무 낮으면(예: 3~4) 정상적인 반복 행동(SURVEY의
+# NO_OP 연속 등)까지 오탐하고, 너무 높으면 정체를 늦게 알아챈다 —
+# 회전만으로 한 바퀴(24스텝) 도는 SEEK 복구 루프보다는 확실히 짧게.
+_STUCK_TICKS_THRESHOLD = 10
+_VLM_RECOVER_MAX_TICKS = 20  # VLM이 계속 "아직 안 열림"이라 해도 여기서 강제 종료
+# 실측으로 발견한 별도 정체 패턴(dev_log.md): 액션은 계속 바뀌는데(좌우
+# 오락가락 등) 방은 전혀 못 넘어가는 경우 — RETURN이 목표 방을 못 찾고
+# 500틱 넘게 같은 방에 갇힌 사례를 실측으로 확인함. SEEK가 한 방향의
+# 4단계 복구 사다리를 정상적으로 다 밟는 데도 수십~백 틱 정도는 걸릴 수
+# 있어(단계마다 6~15액션 반복 x 최대 4단계 x 후보 방향 여러 개) 너무
+# 낮추면 정상 동작까지 방해하므로, 확실히 비정상인 수준으로 넉넉하게 잡음.
+_STUCK_ROOM_TICKS_THRESHOLD = 150
+
 
 def _heading_diff(a: int, b: int) -> int:
     """b - a를 [-180, 180]로 정규화. TURN_RIGHT는 헤딩을 줄이고 TURN_LEFT는
@@ -185,6 +200,19 @@ class ExplorerPolicy:
         self.flee_fastpath_attack_streak = 0  # CV 조준으로 같은 자리를 연속 공격한 횟수
         self.vlm_calls_used = 0      # strike 단계 locate_enemy() 호출 수(예산 상한용)
         self._proactive_attack_streak = 0  # 선제공격(비FLEE)이 연속 몇 틱째인지 — 무한루프 방지용
+
+        # VLM_RECOVER: 정체 감지 + VLM 조종 인계
+        self._stuck_last_action = None
+        self._stuck_streak = 0
+        self._stuck_ref_frame = None  # 지금 스트릭이 시작된 시점의 프레임(그 이후 실제 진전이 있었는지 판정용)
+        self._stuck_last_room = None
+        self._stuck_room_ticks = 0
+        self.pre_recover_state = None
+        self.pre_recover_target = None
+        self._vlm_recover_ticks = 0
+
+        # DFS 스택: 부모 방 도착 확인 전까지는 pop을 미룬다(위 _start_backtrack 주석 참고)
+        self._stack_pop_pending = None
 
         self.recenter_room = None
         self.recenter_steps = 0
@@ -235,6 +263,22 @@ class ExplorerPolicy:
     # --- 메인 진입점 ------------------------------------------------
     def step(self, obs):
         hud = self._read_hud_cached(obs)
+
+        # 정체 감지용 보조 신호: 같은 방에 계속 머물러 있는지(=방을 못
+        # 넘어가는지) 액션 종류와 무관하게 추적한다. 실측으로 발견한 문제
+        # (dev_log.md): "같은 액션 반복" 기준만으로는 좌우로 오락가락하며
+        # 액션 자체는 계속 바뀌는데 방은 전혀 안 바뀌는 경우(RETURN이
+        # 목표 방을 못 찾고 500틱 넘게 한 방에 갇힘)를 못 잡는다. 방
+        # 이름은 HUD OCR로 매 틱 거의 공짜로 읽으니 이것도 같이 본다.
+        if hud.ok and hud.room_name is not None:
+            canon_now = self._canonicalize(hud.room_name)
+            if canon_now == self._stuck_last_room:
+                self._stuck_room_ticks += 1
+            else:
+                self._stuck_room_ticks = 0
+                self._stuck_last_room = canon_now
+        else:
+            self._stuck_room_ticks = 0
 
         # 매 스텝 공통: HP 하락 감지 (화면에 뭐가 보이든 최우선으로 반응).
         # 후진해도 적과의 거리가 안 벌어진다는 게 실측 확인됐으므로(위 상단
@@ -304,6 +348,33 @@ class ExplorerPolicy:
             return int(self._Action.MOVE_FORWARD)
 
         action = self._dispatch(hud, obs)
+
+        # 정체 감지: 같은 액션이 반복되는데 화면도 안 바뀌면(=제자리에서
+        # 맴돔) 룰베이스를 잠깐 멈추고 VLM에게 조종을 맡긴다(사용자
+        # 지시). VLM_RECOVER 자신은 이 감지 대상에서 뺀다(무한 재진입
+        # 방지) — DONE도 뺀다(더 갈 곳이 없어 의도적으로 대기 중이므로).
+        # HINT_CAPTURE도 뺀다 — 문 앞까지 접근/후퇴하는 고정 스텝 수
+        # 시퀀스라 원래도 MOVE_FORWARD가 여러 틱 연속되고(막힌 문에
+        # 다가가는 중이라 화면도 잘 안 바뀜), 그 자체가 정상 동작이라
+        # 정체로 오탐하면 자체 20틱 상한보다 먼저 끊겨버린다.
+        if self.state not in ("VLM_RECOVER", "DONE", "HINT_CAPTURE"):
+            if int(action) == self._stuck_last_action:
+                self._stuck_streak += 1
+            else:
+                self._stuck_streak = 0
+                self._stuck_last_action = int(action)
+                self._stuck_ref_frame = obs
+            tight_loop = (self._stuck_streak >= _STUCK_TICKS_THRESHOLD
+                          and self._stuck_ref_frame is not None
+                          and geo.frame_motion(self._stuck_ref_frame, obs) < geo.BLOCKED_MOTION)
+            # 넓은 의미의 정체(액션은 바뀌어도 방을 못 넘어감)는 SEEK/
+            # RETURN/RECENTER에서만 본다 — SURVEY는 원래 한 방에 오래
+            # 머물며 4방향을 다 보는 게 정상 동작이라 이 기준에서 뺀다.
+            wide_loop = (self.state in ("SEEK", "RETURN", "RECENTER")
+                         and self._stuck_room_ticks >= _STUCK_ROOM_TICKS_THRESHOLD)
+            if tight_loop or wide_loop:
+                action = self._start_vlm_recover(obs)
+
         self.prev_frame = obs
         return int(action)
 
@@ -320,6 +391,8 @@ class ExplorerPolicy:
             return self._step_hint_capture(hud, obs)
         if self.state == "RETURN":
             return self._step_return(hud, obs)
+        if self.state == "VLM_RECOVER":
+            return self._step_vlm_recover(obs)
         if self.state == "DONE":
             return self._Action.TURN_RIGHT  # 더 갈 새 방 없음 — 제자리 대기
         return self._enter_room(hud, entry_heading=None, parent=None)
@@ -711,6 +784,10 @@ class ExplorerPolicy:
         self._hint_captured_this_door = True  # 성공 여부와 무관하게 한 번만 시도
         self._hint_capture_return_state = self.state  # 보통 "SEEK"
         self.state = "HINT_CAPTURE"
+        # HINT_CAPTURE는 정체 감지 대상에서 빠지므로, 복귀 후 엉뚱한
+        # 과거 스트릭이 이어지지 않게 여기서 리셋해둔다.
+        self._stuck_streak = 0
+        self._stuck_last_action = None
         return self._Action.NO_OP
 
     def _step_hint_capture(self, hud, obs):
@@ -789,12 +866,30 @@ class ExplorerPolicy:
 
     # --- RETURN: 특정 방으로 되돌아가기(백트랙 겸용) ----------------------
     def _start_backtrack(self, canon):
-        self.scene.stack.pop()
+        # 실측으로 발견한 버그(dev_log.md): 예전엔 여기서 곧바로
+        # stack.pop()을 했는데, 그러면 "부모 방으로 실제로 돌아가는 데
+        # 성공했다"는 확인 전에 스택이 이미 줄어든다. 되돌아가는 길이
+        # 막혀서 도중에 포기하면(_step_return의 on_final_give_up) 지금
+        # 물리적으로 있는 방 기준으로 _start_seek을 다시 부르는데, 그
+        # 방이 이미 done이면 _start_seek이 _start_backtrack을 다시 불러
+        # 스택을 한 번 더 pop한다 — 즉 실제로는 한 번만 떠났는데 스택은
+        # 두 번 줄어드는 "이중 pop"이 나서, 아직 안 가본 조상 방(예:
+        # 스폰 방의 나머지 방향들)이 통째로 건너뛰어지고 스택이 예정보다
+        # 일찍 텅 비어 DONE으로 빠졌다(실측: 8~12개 방 중 5개만 방문하고
+        # 스폰 방에 unknown 방향이 3개나 남은 채 종료). 그래서 pop은
+        # "부모 방에 실제로 도착"을 _step_return이 확인한 순간에만
+        # 하도록 미룬다 — 도중에 실패해도 스택이 그대로라 재시도가 항상
+        # 안전(멱등)하다.
         if not self.scene.stack:
             self.state = "DONE"
             return self._Action.NO_OP
-        parent_name, _parent_entry = self.scene.stack[-1]
+        if len(self.scene.stack) == 1:
+            self.scene.stack.pop()
+            self.state = "DONE"
+            return self._Action.NO_OP
+        parent_name, _parent_entry = self.scene.stack[-2]
         node = self.scene.nodes[canon]
+        self._stack_pop_pending = canon
         self.return_target_room = parent_name
         self.target_heading = (node.entry_heading + 180) % 360
         self.recover_attempts = 0
@@ -811,6 +906,11 @@ class ExplorerPolicy:
     def _step_return(self, hud, obs):
         canon = self._canonicalize(hud.room_name) if hud.room_name else None
         if canon == self.return_target_room:
+            if (self._stack_pop_pending is not None
+                    and self.scene.stack
+                    and self.scene.stack[-1][0] == self._stack_pop_pending):
+                self.scene.stack.pop()
+            self._stack_pop_pending = None
             node = self.scene.nodes[canon]
             if node.done:
                 return self._start_backtrack(canon)
@@ -821,6 +921,20 @@ class ExplorerPolicy:
                 self.recenter_room = canon
                 return self._start_survey_scan()
             return self._start_seek(canon, node)
+
+        # 실측으로 발견한 버그(dev_log.md): RETURN이 장애물을 피하다
+        # 엉뚱한 문(예: 방금 나온 방으로 되돌아가는 문)으로 잘못 들어가면,
+        # 시작할 때 한 번 계산해둔 target_heading(그때 있던 방 기준)이
+        # 지금 물리적으로 있는 방과 안 맞아 방향을 잃고 두 방 사이를
+        # 몇백 틱씩 맴돌았다(실측: seed=7에서 Coral Vault<->Ivory Library
+        # 사이 500틱+ 정체). 매 틱 SceneGraph.find_path로 "지금 있는
+        # 방 -> 최종 목표 방"의 다음 홉을 다시 계산해서, 엉뚱한 방으로
+        # 새도 스스로 교정한다 — 이미 다 파악된 방들 사이의 작은 그래프
+        # BFS라 비용이 거의 없다.
+        if canon is not None and canon in self.scene.nodes:
+            path = self.scene.find_path(canon, self.return_target_room)
+            if path:
+                self.target_heading = path[0][1]
 
         def on_final_give_up():
             # 여러 번 단계적으로 시도해도 원래 뚫려있어야 할 길을 못
@@ -962,6 +1076,55 @@ class ExplorerPolicy:
                         return self._resume_after_flee()
 
         return self._Action.TURN_RIGHT
+
+    # --- VLM_RECOVER: 정체(같은 액션 반복 + 화면 안 바뀜) 시 VLM 조종 인계 ---
+    def _start_vlm_recover(self, obs):
+        self.pre_recover_state = self.state
+        self.pre_recover_target = self.target_heading
+        self.state = "VLM_RECOVER"
+        self._vlm_recover_ticks = 0
+        self._stuck_streak = 0
+        self._stuck_last_action = None
+        return self._step_vlm_recover(obs)
+
+    def _step_vlm_recover(self, obs):
+        self._vlm_recover_ticks += 1
+        if self._vlm_recover_ticks > _VLM_RECOVER_MAX_TICKS:
+            return self._end_vlm_recover()
+        if self.vlm_calls_used >= _FLEE_VLM_MAX_CALLS:
+            return self._end_vlm_recover()
+        self.vlm_calls_used += 1
+        result = recover_action(obs)
+        if not result.ok:
+            return self._end_vlm_recover()
+        if result.data.get("reached_open_area"):
+            return self._end_vlm_recover()
+        name = result.data.get("action")
+        action_map = {
+            "turn_left": self._Action.TURN_LEFT,
+            "turn_right": self._Action.TURN_RIGHT,
+            "move_forward": self._Action.MOVE_FORWARD,
+            "move_back": self._Action.MOVE_BACK,
+        }
+        action = action_map.get(name)
+        if action is None:
+            return self._end_vlm_recover()
+        self._last_action_was_forward = (action == self._Action.MOVE_FORWARD)
+        return action
+
+    def _end_vlm_recover(self):
+        self.state = self.pre_recover_state or "SURVEY"
+        self.target_heading = self.pre_recover_target
+        self._need_align = True
+        self._last_action_was_forward = False
+        self._nav_bias_deg = 0.0
+        self._nav_fail_count = 0
+        self._nav_action_queue = []
+        self._nav_probed_center = False
+        self._nav_cornered_count = 0
+        self.recover_attempts = 0
+        self._stuck_room_ticks = 0  # 룰베이스에 다시 온전한 기회를 준다
+        return self._Action.NO_OP
 
     def _resume_after_flee(self):
         self.flee_phase = None
