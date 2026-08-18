@@ -28,9 +28,10 @@ from agent import enemies as EN
 from agent import geometry as geo
 from agent import localize as L
 from agent import mapper as M
+from agent import motion as MOT
 from agent.perception import Percept, Perception
-from agent.pose import (ATTACK, MOVE_FORWARD, NO_OP, TURN_LEFT, TURN_RIGHT,
-                        PoseTracker)
+from agent.pose import (ATTACK, MOVE_BACK, MOVE_FORWARD, NO_OP, TURN_LEFT,
+                        TURN_RIGHT, PoseTracker)
 
 # --- 주행 파라미터 ------------------------------------------------------
 HEADING_TOL = 8.0          # 이 각도 안이면 "목표를 보고 있다"
@@ -47,6 +48,7 @@ ALERT_STEPS = 600          # 피격 후 경계 모드 지속 스텝
 SWEEP_LIMIT = 52           # 피격 중 '때리며 훑기' 최대 스텝(≈한 바퀴)
 UNDER_ATTACK_STEPS = 150   # 마지막 피격 이후 이 스텝까지는 교전 우선
 ATTACK_CONE_DEG = 20.0     # env의 공격 콘 반각 — 이 안이면 바로 때린다
+ATTACK_RANGE = 3.0         # env의 공격 사거리(m)
 MOB_MIN_SCORE = 0.6        # 몹 탐지기 신뢰도 하한
 MOB_SURE_SCORE = 0.78      # 피격 중 '확신' 기준 (확인 가능한 단서를 모두 통과)
 FORCE_SWEEP_STEPS = 52     # 목표를 잘못 짚었다고 판단됐을 때 강제 스윕 기간
@@ -59,11 +61,48 @@ SENTRY_PROBE_HP = 0.6      # 이 체력 비율 이상일 때만 추가 확인에
 CELL_CANDIDATES = [6.0, 7.0, 8.0, 9.0, 10.0]   # difficulty.yaml의 방 한 변 범위
 MIN_MATCH_SCORE = 0.45     # 스캔 정합 인라이어 비율이 이 밑이면 위치 갱신 보류
 
+# --- 움직임 탐지 (motion.py) -------------------------------------------
+# 정지한 두 프레임의 차분은 적만 잡아낸다(렌더러가 결정적이므로 정적
+# 장면의 차분은 0px). 그래서 '가끔 멈춰서 보는' 것만으로 외형과 무관한
+# 적 탐지가 공짜로 돌아간다. 멈춤 비용은 스텝 두 개(≈0.024 시뮬초)뿐이다.
+LOOK_EVERY = 24            # 주행 중 정지 관측 주기(스텝)
+LOOK_HOLD = 2              # 정지 관측을 유지하는 스텝 수
+TRACK_FRESH = 400          # 기억(사망 판정·QA)용 트랙 보존 기간
+# 조준용 유효 기간은 훨씬 짧아야 한다. 적은 1.5 m/s로 걷기 때문에 400스텝
+# (≈4.8 시뮬초) 전 위치는 이미 7m쯤 어긋나 있다. 실측 시드 7에서 458스텝
+# 묵은 트랙을 계속 겨냥하며 허공에 168대를 휘둘렀다. 60스텝이면 적이
+# 움직이는 거리는 3m 이내라, 사거리(3m) 안에서는 조준이 대체로 유효하다.
+# 60까지 조였더니 교전 자체가 안 걸려 10시드 사망이 1→4로 늘었다.
+TRACK_AIM_FRESH = 150
+# 목격 1회짜리 트랙은 조준하지 않는다. 지평선 근처는 1픽셀 행이 1m를
+# 넘어서, 먼 적이 엉뚱하게 가까운 좌표로 투영되는 일이 잦다. 진짜로
+# 다가오는 적은 목격이 금방 쌓인다(실측 12회).
+TRACK_MIN_SIGHTINGS = 2
+TRACK_MAX_TURNS = 26       # 트랙 조준에 허용하는 회전 스텝(≈한 바퀴 반)
+# 역투영 위치 오차는 거리 제곱에 비례해 커진다(지평선 근처 1행 ≈ 1m).
+# 이보다 먼 움직임은 '저기서 뭔가 움직인다'로만 쓰고 트랙은 만들지 않는다.
+MOTION_TRACK_MAX = 7.0
+# 사거리·콘 안에서 이만큼 때렸는데도 안 죽고 안 움직이면 트랙 위치가 틀린
+# 것이다(적 HP 상한 4 → 4대면 죽는다). 실측에서 유령 트랙 하나에 400회
+# 넘게 공격을 쏟아붓는 판이 있었다. 그런 트랙은 조준에서 빼고 킬로도
+# 세지 않는다.
+TRACK_GIVEUP = 24
+# 누적 조준 공격이 이만큼이면 영구 배제한다. 적 HP 상한이 4라, 정말 거기
+# 있었다면 진작 열 번은 죽었다.
+TRACK_RETIRE = 60
+PHANTOM_STEPS = 240        # 유령으로 강등된 트랙을 다시 볼 때까지의 유예
+# 사망 판정에 쓰는 콘/사거리는 env 값(±20°, 3m)보다 조금 넉넉하게 잡는다.
+# 블롭 중심 방위와 바닥 접점 거리가 추정값이라, env 값을 그대로 쓰면
+# 실제로 죽인 적을 놓친다(실측: 실제 3킬 중 1킬만 검출).
+KILL_CONE_DEG = 26.0
+KILL_RANGE = 3.8
+
 
 class Explorer:
     def __init__(self, trace: bool = False):
         self.trace = [] if trace else None
         self.perc = Perception()
+        self.motion = MOT.MotionDetector()
         self.map = M.WorldMap()
         self.pose = PoseTracker()
         self.step_i = 0
@@ -113,6 +152,10 @@ class Explorer:
         self._sentry_tick = 0
         self._revisit_target = None
         self._locked_at = None
+        # 움직임 탐지
+        self._scan_phase = 0            # SCAN의 회전/정지 사이클 위치
+        self._aim_track = None          # 이번 스텝 조준 대상 트랙 (없으면 None)
+        self._motion_steps = 0          # 유효 정지 쌍을 얻은 스텝 수(진단용)
 
         self._fails: Dict[Tuple[Tuple[int, int], Optional[str]], int] = {}
         self._blacklist: Dict[Tuple[Tuple[int, int], Optional[str]], int] = {}
@@ -126,8 +169,10 @@ class Explorer:
             "hints": [],
             "events": [],
             "locked_door": None,
+            "enemies": [],        # 확정 사망한 적 (map.tracks가 원본)
         }
-        self.stats = {"blocked": 0, "attacks": 0, "scans": 0, "transitions": 0}
+        self.stats = {"blocked": 0, "attacks": 0, "scans": 0, "transitions": 0,
+                      "looks": 0, "motion_hits": 0, "kills": 0}
         self.state_steps: Dict[str, int] = {}   # 상태별 소요 스텝 (진단용)
         self._step_label = "BOOT"
 
@@ -144,6 +189,10 @@ class Explorer:
                                                and self.step_i % 4 == 0))
         self.pose.update(self.last_action, p.moved,
                          p.heading if p.hud_fresh else None)
+
+        # 움직임 탐지는 포즈 갱신 **뒤에** 돌려야 한다. 정지 쌍 판정이
+        # 갱신된 포즈 키의 동일성으로 이뤄지기 때문이다.
+        self._observe_motion(obs, p)
 
         self._track_room(p)
         self._track_hp(p)
@@ -235,6 +284,122 @@ class Explorer:
         self._last_hp = p.hp
         self._last_hp_max = p.hp_max
 
+    # --- 움직임 탐지 ---------------------------------------------------
+    def _pose_key(self) -> tuple:
+        return (round(self.pose.x, 3), round(self.pose.z, 3),
+                round(self.pose.heading, 1))
+
+    def _observe_motion(self, obs, p: Percept) -> None:
+        """정지 쌍이면 차분을 돌려 적 트랙을 갱신하고, 사망을 판정한다.
+
+        '정지'는 직전 액션이 에이전트를 움직이지 않았다는 뜻이다. ATTACK은
+        레이캐스트만 하므로 정지에 포함된다 — 때리는 동안에도 탐지가
+        계속 돌아간다는 게 이 설계의 핵심이다(motion.py 참고).
+        """
+        stationary = (
+            self.last_action in (NO_OP, ATTACK)
+            or (self.last_action in (MOVE_FORWARD, MOVE_BACK) and not p.moved)
+        )
+        blobs = self.motion.observe(obs, self._pose_key(), stationary, p.banner)
+        if not self.motion.paired:
+            return
+        self._motion_steps += 1
+        # 사망으로 판정한 블롭은 트랙 입력에서 빼야 한다. 안 그러면 방금
+        # 죽은 것으로 표시한 트랙이 같은 블롭에 의해 곧바로 되살아난다.
+        killed_blob = self._detect_kill_event(blobs, p)
+        self._ingest_motion([b for b in blobs if b is not killed_blob], p)
+
+    def _ingest_motion(self, blobs, p: Percept) -> set:
+        """차분 블롭을 월드 좌표로 역투영해 트랙에 반영. 갱신된 트랙 집합."""
+        touched = set()
+        for b in blobs:
+            # 2.6m 안쪽은 바닥 접점이 화면 밖이라 거리가 포화값으로만 온다.
+            # 그 경우 '코앞'이라는 사실만 쓰고 대표값으로 찍는다.
+            d = b.distance if b.resolved else 1.6
+            if d > MOTION_TRACK_MAX:
+                continue        # 위치를 믿을 수 없는 거리 — 트랙을 만들지 않는다
+            hx, hz = geo.heading_to_vec(self.pose.heading + b.bearing)
+            x, z = self.pose.x + hx * d, self.pose.z + hz * d
+            t, revived = self.map.note_motion(x, z, self.cur_name or "?",
+                                              self.step_i)
+            if not touched:
+                self.stats["motion_hits"] += 1
+            touched.add(id(t))
+            for name in EN.palette_sample(p.frame, *b.col_range):
+                if name not in t.colors:
+                    t.colors.append(name)
+        return touched
+
+    def _detect_kill_event(self, blobs, p: Percept):
+        """방금 때린 프레임에서 실루엣이 통째로 사라졌으면 킬로 센다.
+
+        트랙의 생사를 추론해서 세는 방식은 실패했다. 적이 움직이는 데다
+        역투영 위치에 오차가 있어서 같은 적이 여러 트랙으로 갈리고, 갈린
+        조각마다 사망 판정이 붙어 실제 3킬에 19킬을 주장했다. 트랙 연결을
+        아무리 조여도 '몇 마리였나'를 트랙 수로 세는 한 이 오차는 남는다.
+
+        대신 **사건**을 센다. 적이 죽는 순간 메시가 통째로 제거되므로
+        (env._resolve_agent_attack), 그 프레임의 차분에는 몹 실루엣이
+        있던 자리가 통째로 잡히고 **새 프레임에는 팔레트 색이 남지 않는다**.
+        걸어서 이동한 경우와는 여기서 갈린다 — 이동이면 옮겨간 자리에
+        여전히 팔레트 색 픽셀이 있다.
+
+        세는 규칙이 정확한 이유는 env의 공격 판정 때문이다. ATTACK 한 번은
+        콘 안에서 **가장 가까운 적 하나**만 때리므로, 한 스텝에 죽을 수
+        있는 적은 최대 한 마리다. 그래서 스텝당 최대 1킬로 못 박는다.
+        """
+        if self.last_action != ATTACK:
+            return None                  # 차분 쌍이 공격을 사이에 두지 않았다
+        best = None
+        for b in blobs:
+            if not b.vanished:
+                continue
+            if abs(b.bearing) > KILL_CONE_DEG:
+                continue                 # env의 공격 콘 밖 — 우리가 죽인 게 아니다
+            d = b.distance if b.resolved else 1.6
+            if d > KILL_RANGE:
+                continue
+            if best is None or b.pixels > best.pixels:
+                best = b
+        if best is None:
+            return None
+        self.stats["kills"] += 1
+        d = best.distance if best.resolved else 1.6
+        hx, hz = geo.heading_to_vec(self.pose.heading + best.bearing)
+        rec = {"room": self.cur_name, "step": self.step_i,
+               "colors": list(best.colors_before or []),
+               "pos": [round(self.pose.x + hx * d, 1),
+                       round(self.pose.z + hz * d, 1)]}
+        self.memory["enemies"].append(rec)
+        self.memory["events"].append(dict(rec, type="enemy_killed"))
+        # 그 자리의 트랙은 죽은 것으로 표시해 조준 대상에서 뺀다.
+        t = self.map.track_near(rec["pos"][0], rec["pos"][1], 2.0,
+                                self.step_i, TRACK_FRESH)
+        if t is not None:
+            t.alive = False
+            t.killed_step = self.step_i
+        return best
+
+    def enemy_report(self) -> dict:
+        """QA용 적 요약. 메모리는 QA 시작 시점에 동결되므로 조회만 한다.
+
+        색은 팔레트 이름(red/green/blue/yellow/purple/grey)으로 저장돼 있다.
+        이 6색은 env 코드에 박힌 miniworld 렌더 팔레트라 평가 때 바뀌는
+        에셋이 아니므로, held-out 시드에서도 그대로 쓸 수 있다.
+        """
+        killed = self.memory["enemies"]
+        seen = list(self.map.tracks)
+        by_room: Dict[str, int] = {}
+        for rec in killed:
+            key = rec["room"] or "?"
+            by_room[key] = by_room.get(key, 0) + 1
+        return {
+            "killed": len(killed),
+            "seen": len(seen),
+            "killed_by_room": by_room,
+            "killed_detail": list(killed),
+        }
+
     def _on_bump(self, p: Percept) -> None:
         """전진 실패 지점을 기록하고, 그게 벽이면 지도에 반영한다."""
         self.stats["blocked"] += 1
@@ -288,8 +453,7 @@ class Explorer:
             # 되는 스핀 어택은 계속한다.
             if self.step_i <= self._combat_until:
                 self._combat_swing += 1
-                self.stats["attacks"] += 1
-                return ATTACK if self._combat_swing % 2 else TURN_LEFT
+                return self._sweep_action()
             return NO_OP
 
         if self._recover:
@@ -315,12 +479,14 @@ class Explorer:
             # 손실 없음). 조준하려고 서는 것만 금지한다.
             if threat is not None and abs(threat[0]) <= ATTACK_CONE_DEG:
                 self._step_label = "COMBAT"
-                self.stats["attacks"] += 1
                 self._last_combat_step = self.step_i
-                return ATTACK
+                return self._aimed_attack()
             threat = None
-        if threat is not None and self._threat_seen != self.step_i - 1:
+        if (threat is not None and self._aim_track is None
+                and self._threat_seen != self.step_i - 1):
             # 한 프레임짜리 오검출로 교전에 들어가지 않도록 한 스텝 지연.
+            # 움직임 트랙에는 걸지 않는다 — 정적 장면의 차분이 0px이라
+            # 한 프레임짜리 오검출이라는 게 존재하지 않는다.
             self._threat_seen = self.step_i
             threat = None
         elif threat is not None:
@@ -387,20 +553,39 @@ class Explorer:
         self._scan_seen = set()
         self._scan_colors = []
         self._scan_started = self.step_i
+        self._scan_phase = 0
 
     def _scan(self, p: Percept) -> int:
-        """15° 버킷 24개가 다 찰 때까지 돈다.
+        """15° 버킷 24개가 다 찰 때까지, 회전 1 + 공격 2를 반복한다.
 
         회전 횟수가 아니라 '어느 방위를 봤는지'로 종료를 판정하므로,
         중간에 전투로 끊겼다 돌아와도 스캔이 정상적으로 완성된다.
+
+        회전 사이에 ATTACK을 두 번 끼우는 이유는 두 가지다.
+
+        1. ATTACK은 에이전트를 움직이지 않으므로 그 두 프레임이 **정지 쌍**이
+           되고, 차분이 곧 적 탐지다(motion.py). 방을 처음 훑는 이 스캔이
+           방 안 적을 전부 트랙으로 잡는 자리가 된다.
+        2. 공격은 쿨다운이 없고 사거리 3m·콘 ±20°라, 도는 김에 사거리 안의
+           적에게 그대로 데미지가 들어간다. 비용은 없다 — 시뮬 시간은
+           step() 사이 실제 경과 시간으로만 흐르므로 스캔이 24스텝에서
+           72스텝이 되어도 0.3초가 0.9초로 늘 뿐이다.
+
+        깊이 표본은 새 버킷에서만 모은다. 같은 방위 표본을 세 배로 쌓으면
+        정합(localize.match_all) 비용만 늘고 정보는 늘지 않는다.
         """
-        if p.profile is not None:
+        bucket = int(round(self.pose.heading / 15.0)) % 24
+        if p.profile is not None and bucket not in self._scan_seen:
             self._scan_samples.append((self.pose.heading, p.profile))
-            self._scan_seen.add(int(round(self.pose.heading / 15.0)) % 24)
+            self._scan_seen.add(bucket)
         if p.wall_color:
             self._scan_colors.append(p.wall_color)
-        if len(self._scan_seen) < SCAN_TURNS and self.step_i - self._scan_started < 400:
-            return TURN_LEFT
+        if len(self._scan_seen) < SCAN_TURNS and self.step_i - self._scan_started < 900:
+            self._scan_phase = (self._scan_phase + 1) % 3
+            if self._scan_phase == 0:
+                return TURN_LEFT
+            self.stats["looks"] += 1
+            return ATTACK
         self._finish_scan()
         return self._choose_goal()
 
@@ -533,6 +718,19 @@ class Explorer:
 
     # --- 주행 ----------------------------------------------------------
     def _goto(self, p: Percept) -> int:
+        # 주행 중 정기 정지 관측. 이동은 매 스텝 포즈를 바꾸므로 정지 쌍이
+        # 아예 안 생긴다 — 방을 가로지르는 동안 다가오는 적을 못 본다는
+        # 뜻이다. LOOK_HOLD 스텝만 멈춰 주면 그 구간이 메워진다. 비용은
+        # LOOK_EVERY당 두 스텝(≈0.024 시뮬초)뿐이다.
+        if self.step_i % LOOK_EVERY < LOOK_HOLD and not p.banner:
+            # NO_OP이 아니라 ATTACK으로 멈춘다. 정지 효과는 같은데(ATTACK은
+            # 에이전트를 안 움직인다) 사거리 안에 적이 있으면 그대로 데미지가
+            # 들어간다. env의 레이캐스트는 우리가 무엇을 겨냥한다고 '믿는지'와
+            # 무관하게 콘 안의 가장 가까운 적을 때리므로, 목표가 없어도
+            # 휘두르는 것 자체가 방어가 된다.
+            self.stats["looks"] += 1
+            self._register_blind_hit()
+            return ATTACK
         if self._check_locked_door(p):
             return self._choose_goal()
         status, action = self._drive(p)
@@ -855,21 +1053,40 @@ class Explorer:
         return step is not None and self.step_i - step < 150
 
     # --- 전투 ----------------------------------------------------------
+    def _track_target(self) -> Optional[Tuple[float, float]]:
+        """사거리 안의 움직임 트랙 → (상대 방위, 거리). 없으면 None."""
+        t = self.map.track_near(self.pose.x, self.pose.z, ATTACK_RANGE,
+                                self.step_i, TRACK_AIM_FRESH,
+                                min_sightings=TRACK_MIN_SIGHTINGS)
+        if t is None:
+            return None
+        self._aim_track = t
+        return (self.pose.bearing_to(t.x, t.z),
+                self.pose.distance_to(t.x, t.z))
+
     def _threat(self, p: Percept) -> Optional[Tuple[float, float]]:
         """선제 공격 대상의 (상대 방위, 거리).
 
-        1순위는 몹 탐지기(agent/enemies.py) — 채도·바닥 접점·키로 사람형
-        몹을 직접 알아본다. 실측 방위 오차 0.6°, 거리 오차 0.2m라 조준이
-        거의 한 번에 끝난다. 탐지기를 놓치는 경우(회색 옷, 가려짐)는
+        1순위는 **움직임 트랙**이다(motion.py). 정적 장면의 프레임 차분이
+        0px라 오검출이 원리적으로 없고, 색·질감·형태를 하나도 안 보므로
+        held-out 에셋(적 얼굴/3D 오브젝트)에 영향을 받지 않는다. 게다가
+        적이 등 뒤로 돌아가도 트랙의 마지막 위치가 남아 조준이 가능하다.
+
+        2순위가 외형 몹 탐지기(agent/enemies.py)다. 트랙이 아직 없는
+        첫 조우(=한 번도 정지 관측을 못 한 상태)를 메운다. 둘 다 놓치면
         맞고 있을 때에 한해 기하 휴리스틱으로 보완한다.
         """
+        self._aim_track = None
         room = self.map.get(self.cur_cell)
         alert = self.step_i <= self._alert_until
         under = self._under_attack()
+        if self.state_steps.get("COMBAT", 0) > 1800:
+            return None                      # 전투에 너무 많이 쓰면 그만둔다
+        track = self._track_target()
+        if track is not None:
+            return track
         if room is None and not under:
             return None
-        if self.state_steps.get("COMBAT", 0) > 1200:
-            return None                      # 전투에 너무 많이 쓰면 그만둔다
         max_dist = 3.0 if (alert or under) else 2.4
         mob = self._detect_mob(p, max_dist, relaxed=under)
         if mob is not None:
@@ -1004,29 +1221,37 @@ class Explorer:
             self._combat_swing = 0
         forced = self.step_i <= self._force_sweep_until
 
+        self._aim_track = None
         if forced:
             target = None
-        elif relaxed:
-            # 맞고 있을 때 정면에서 보이는 어중간한 후보를 때리다가, 정작
-            # 옆·뒤에서 때리는 적을 놓치는 게 최악이다(실측: 공격 413회
-            # 전부 콘 밖, 킬 0). 확신 있는 몹 탐지만 목표로 삼고, 아니면
-            # 때리면서 도는 스윕으로 찾는다.
-            target = self._detect_mob(p, 3.0, relaxed=True,
-                                      min_score=MOB_SURE_SCORE)
         else:
-            target = self._detect_mob(p, 3.0, relaxed=False)
+            # 트랙이 최우선. 움직임으로 확인된 적이라 '오브젝트를 때리고
+            # 있는 것 아닌가' 하는 의심 자체가 필요 없다.
+            target = self._track_target()
+        if target is None and not forced:
+            if relaxed:
+                # 맞고 있을 때 정면에서 보이는 어중간한 후보를 때리다가,
+                # 정작 옆·뒤에서 때리는 적을 놓치는 게 최악이다(실측: 공격
+                # 413회 전부 콘 밖, 킬 0). 확신 있는 몹 탐지만 목표로 삼고,
+                # 아니면 때리면서 도는 스윕으로 찾는다.
+                target = self._detect_mob(p, ATTACK_RANGE, relaxed=True,
+                                          min_score=MOB_SURE_SCORE)
+            else:
+                target = self._detect_mob(p, ATTACK_RANGE, relaxed=False)
 
         if target is None:
             if (relaxed or forced) and self._combat_swing <= SWEEP_LIMIT:
-                self.stats["attacks"] += 1
-                return ATTACK if self._combat_swing % 2 else TURN_LEFT
+                return self._sweep_action()
             self._end_combat()
             return NO_OP
 
-        limit = SWEEP_LIMIT if relaxed else ATTACK_GIVEUP
+        on_track = self._aim_track is not None
+        limit = SWEEP_LIMIT if (relaxed or on_track) else ATTACK_GIVEUP
         if self._combat_swing > limit:
-            if not relaxed:
+            if not relaxed and not on_track:
                 # 계속 때려도 안 사라진다 → 적이 아니라 정적 오브젝트로 학습.
+                # 트랙 목표에는 적용하지 않는다 — 움직인 것이 확인된 대상을
+                # 정적 장애물로 학습하면 그 뒤로 영영 무시하게 된다.
                 room = self.map.get(self.cur_cell)
                 if room is not None:
                     hx, hz = geo.heading_to_vec(self.pose.heading + target[0])
@@ -1040,17 +1265,88 @@ class Explorer:
         bearing = target[0]
         if abs(bearing) > ATTACK_CONE_DEG:
             self._combat_turns += 1
-            if self._combat_turns > COMBAT_MAX_TURNS:
-                # 조준만 하고 못 때리는 상황. 맞는 중이면 훑기로 넘기고,
-                # 아니면 잘못 짚은 것이므로 교전을 접는다.
+            # 트랙은 위치를 알고 겨누는 것이므로 한 바퀴를 돌아서라도
+            # 조준할 값어치가 있다. 외형 후보는 오검출일 수 있어 짧게 끊는다.
+            max_turns = TRACK_MAX_TURNS if on_track else COMBAT_MAX_TURNS
+            if self._combat_turns > max_turns:
                 if relaxed:
-                    self.stats["attacks"] += 1
-                    return ATTACK
+                    return self._aimed_attack()
                 self._end_combat()
                 return NO_OP
             return TURN_LEFT if bearing > 0 else TURN_RIGHT
+        return self._aimed_attack()
+
+    def _aimed_attack(self) -> int:
+        """조준이 끝난 공격 한 대. 트랙 목표면 사망 판정용으로 기록한다.
+
+        env의 명중 조건(사거리 3m 안 + 콘 ±20° 안)을 그대로 다시 계산해서,
+        그 조건을 만족한 공격만 `hits`로 센다. 트랙 위치가 맞다면 이건 곧
+        실제 명중 수이고, 4대면 적 HP 상한(4)을 넘으므로 사망이 확정된다.
+        """
         self.stats["attacks"] += 1
+        t = self._aim_track
+        if t is not None:
+            t.attacked += 1
+            t.attacked_total += 1
+            t.last_attack_step = self.step_i
+            self._check_phantom(t)
         return ATTACK
+
+    def _check_phantom(self, t) -> None:
+        """때릴 만큼 때렸는데 아무 반응이 없는 트랙을 유령으로 강등한다."""
+        if t.is_phantom(self.step_i):
+            return
+        if t.attacked_total >= TRACK_RETIRE:
+            t.phantom_until = M.RETIRE_MARK      # 영구 배제
+            self._end_combat()
+            return
+        if t.attacked < TRACK_GIVEUP:
+            return
+        t.phantom_until = self.step_i + PHANTOM_STEPS
+        t.attacked = 0
+        self._end_combat()
+
+    def _sweep_action(self) -> int:
+        """목표를 못 짚었을 때의 '때리며 훑기' — 공격 2 + 회전 1의 반복.
+
+        공격을 연속 두 번 넣는 건 데미지 때문만이 아니다. ATTACK은 에이전트를
+        움직이지 않으므로 연속 두 프레임이 **정지 쌍**이 되고, 그 차분이
+        곧 적 탐지다(motion.py). 즉 훑는 동안 매 15°마다 무료로 한 번씩
+        주변을 살피게 되어, 스윕이 끝날 때쯤이면 대개 트랙이 잡혀 있다.
+
+        비용은 거의 없다. 시뮬 시간은 step() 사이의 실제 경과 시간으로만
+        흐르므로(env.py), 스텝 ~12ms 기준 한 바퀴(72스텝)가 0.86 시뮬초다.
+        적의 공격 쿨다운이 0.8~2.0초라 한 바퀴 도는 동안 많아야 한 대 맞는다.
+
+        호출 측에서 이미 _combat_swing을 올린 뒤에 부른다.
+        """
+        if self._combat_swing % 3 == 0:
+            return TURN_LEFT
+        self.stats["attacks"] += 1
+        self._register_blind_hit()
+        return ATTACK
+
+    def _register_blind_hit(self) -> None:
+        """조준 없이 때린 공격도 명중 조건을 만족하면 그 트랙에 기록한다.
+
+        훑기로 죽인 적이 사망 판정에서 빠지는 걸 막는다. env의 레이캐스트는
+        콘 안에서 **가장 가까운** 적을 때리므로 여기서도 같은 규칙을 쓴다.
+        """
+        best, best_d = None, None
+        for t in self.map.live_tracks(self.step_i, TRACK_AIM_FRESH,
+                                      min_sightings=TRACK_MIN_SIGHTINGS):
+            d = self.pose.distance_to(t.x, t.z)
+            if d > ATTACK_RANGE:
+                continue
+            if abs(self.pose.bearing_to(t.x, t.z)) > ATTACK_CONE_DEG:
+                continue
+            if best_d is None or d < best_d:
+                best, best_d = t, d
+        if best is not None:
+            best.attacked += 1
+            best.attacked_total += 1
+            best.last_attack_step = self.step_i
+            self._check_phantom(best)
 
     def _end_combat(self) -> None:
         self._hits_in_combat = 0

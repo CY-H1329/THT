@@ -85,6 +85,13 @@ def run(seed: int, limit_seconds: float, verbose: bool = False) -> dict:
         "attacks": ex.stats["attacks"],
         "scans": ex.stats["scans"],
         "transitions": ex.stats["transitions"],
+        "looks": ex.stats["looks"],
+        "motion_hits": ex.stats["motion_hits"],
+        # 킬 판정 정확도: 에이전트가 주장한 킬 수 vs env 정답
+        "kills_claimed": ex.stats["kills"],
+        "kills_truth": sum(1 for e in env._enemies if not e.is_alive()),
+        "enemies_total": len(env._enemies),
+        "tracks": len(ex.map.tracks),
         "state": ex.state,
         "state_steps": dict(sorted(ex.state_steps.items(), key=lambda kv: -kv[1])),
     }
@@ -120,7 +127,10 @@ def main() -> int:
               f" | cell {r['cell_size']}/{r['true_cell_size']}"
               f" | steps {r['steps']} blocked {r['blocked']}"
               f" | hp {r['hp']} | {r['wallclock_s']}s\n"
-              f"            states {r['state_steps']} attacks {r['attacks']} scans {r['scans']}")
+              f"            states {r['state_steps']} attacks {r['attacks']} scans {r['scans']}\n"
+              f"            KILLS claimed {r['kills_claimed']} / truth {r['kills_truth']}"
+              f" (of {r['enemies_total']}) | tracks {r['tracks']}"
+              f" | looks {r['looks']} motion_hits {r['motion_hits']}")
     if args.json:
         Path(args.json).write_text(json.dumps(results, indent=2), encoding="utf-8")
     return 0

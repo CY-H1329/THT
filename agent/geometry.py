@@ -152,6 +152,20 @@ def height_at(row: float, dist: float) -> float:
     return CAM_HEIGHT - dist * (row - CY) / FOCAL
 
 
+def dist_at_row(row: float, col: float) -> float:
+    """바닥 위 한 점이 픽셀 (row, col)에 찍혔을 때의 거리(m).
+
+    floor_boundary가 열 묶음 단위로 하는 역투영과 같은 식이되, 임의의
+    픽셀 하나에 대해 쓴다(motion.py의 블롭 바닥 접점용).
+    """
+    dy = row + 0.5 - CY
+    if dy <= 1e-6:
+        return MAX_RANGE
+    dz = CAM_HEIGHT * FOCAL / dy
+    u = (col - CX) / FOCAL
+    return float(min(MAX_RANGE, max(NEAR_RANGE, dz * math.sqrt(1.0 + u * u))))
+
+
 def dist_for_height(row: float, height: float) -> float:
     """높이 height인 물체의 꼭대기가 행 row에 보일 때의 거리(m).
 

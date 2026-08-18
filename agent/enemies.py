@@ -46,6 +46,83 @@ NEAR_DEFAULT_DIST = 1.8    # 키 역산이 발산할 때 쓸 근거리 대표값
 MAX_MOB_HEIGHT = 2.45
 
 
+# miniworld가 Box 엔티티를 칠할 때 쓰는 6색 팔레트(miniworld.entity.COLORS).
+# 몹의 셔츠/바지/피부는 이 팔레트에서만 뽑히고(world/enemies.py의
+# _SHIRT/_PANTS/_SKIN_COLORS), 그 목록은 env **코드**에 박혀 있어서 평가
+# 때 교체되는 에셋이 아니다. 반면 3D 오브젝트는 텍스처를 입힌 .obj 메시라
+# 이 방향들에 잘 걸리지 않는다.
+#
+# 실측(개발 시드, 벽 픽셀 제외): 팔레트 방향과 6° 안에 드는 유채색 픽셀의
+# 비율이 적 0.81~0.94, 공개 오브젝트 0.00~0.03. 예외는 duckie(0.79)인데
+# 키 0.4m라 높이 게이트에서 이미 걸린다. 조명은 색을 밝기만 바꾸므로
+# 절대 RGB가 아니라 **RGB 벡터의 방향**으로 판정한다.
+MW_PALETTE = {
+    "red": (1.0, 0.0, 0.0), "green": (0.0, 1.0, 0.0), "blue": (0.0, 0.0, 1.0),
+    "purple": (0.44, 0.15, 0.76), "yellow": (1.0, 1.0, 0.0),
+    "grey": (0.39, 0.39, 0.39),
+}
+_PAL_NAMES = tuple(MW_PALETTE)
+_PAL_VECS = np.array([np.array(v) / np.linalg.norm(v)
+                      for v in MW_PALETTE.values()])
+PAL_TOL_DEG = 8.0
+_PAL_MIN_SAT = 55
+
+
+def palette_pixels(frame: np.ndarray, col_lo: int, col_hi: int) -> int:
+    """열 구간에서 몹 팔레트 방향에 들어맞는 유채색 픽셀 수.
+
+    '실루엣이 아직 거기 있는가'를 세는 용도다(motion.py의 사망 판정).
+    벽 팔레트는 탁해서 _PAL_MIN_SAT를 넘지 못하고, 3D 오브젝트 텍스처는
+    팔레트 방향에 거의 걸리지 않는다(실측 0.00~0.03).
+    """
+    lo = max(0, min(geo.FRAME_W - 1, int(col_lo)))
+    hi = max(lo + 1, min(geo.FRAME_W, int(col_hi)))
+    band = frame[geo.HUD_H:geo.FRAME_H, lo:hi].astype(np.float32)
+    sat = band.max(axis=2) - band.min(axis=2)
+    ok = (sat >= _PAL_MIN_SAT) & (band.max(axis=2) >= 30)
+    if not ok.any():
+        return 0
+    px = band[ok]
+    v = px / (np.linalg.norm(px, axis=1, keepdims=True) + 1e-6)
+    err = np.degrees(np.arccos(np.clip(v @ _PAL_VECS.T, -1.0, 1.0))).min(axis=1)
+    return int((err <= PAL_TOL_DEG).sum())
+
+
+def palette_sample(frame: np.ndarray, col_lo: int, col_hi: int) -> List[str]:
+    """열 구간에서 읽어낸 몹 팔레트 색 이름들(위→아래, 중복 제거).
+
+    QA용이다("적이 무슨 색이었나"). 몹은 위에서부터 피부/셔츠/바지 순으로
+    쌓여 있으므로 순서를 유지해서 돌려준다. 탐지 판정에는 쓰지 않는다 —
+    탐지는 motion.py의 움직임 근거가 맡는다.
+    """
+    lo = max(0, min(geo.FRAME_W - 1, int(col_lo)))
+    hi = max(lo + 1, min(geo.FRAME_W, int(col_hi)))
+    band = frame[geo.HUD_H:geo.FRAME_H, lo:hi].astype(np.float32)
+    sat = band.max(axis=2) - band.min(axis=2)
+    ok = (sat >= _PAL_MIN_SAT) & (band.max(axis=2) >= 30)
+    rows = np.flatnonzero(ok.any(axis=1))
+    out: List[str] = []
+    for y in rows:
+        px = band[y][ok[y]]
+        med = np.median(px, axis=0)
+        n = np.linalg.norm(med)
+        if n < 1e-6:
+            continue
+        err = np.degrees(np.arccos(np.clip(_PAL_VECS @ (med / n), -1.0, 1.0)))
+        k = int(err.argmin())
+        if err[k] > PAL_TOL_DEG:
+            continue
+        name = _PAL_NAMES[k]
+        if not out or out[-1] != name:
+            out.append(name)
+    # 같은 색이 떨어져서 두 번 나오면(팔에 가려진 셔츠 등) 한 번만 남긴다.
+    seen: List[str] = []
+    for n in out:
+        if n not in seen:
+            seen.append(n)
+    return seen
+
+
 @dataclass
 class Mob:
     bearing: float        # 현재 heading 기준 상대 방위(도, 좌 +)

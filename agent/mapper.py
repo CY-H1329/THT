@@ -53,6 +53,76 @@ def names_match(a: Optional[str], b: Optional[str]) -> bool:
     return a.startswith(b) or b.startswith(a)
 
 
+# 적 속도 1.5 m/s × 스텝당 시뮬시간(실측 ~12ms). 트랙 연결 반경을 경과
+# 스텝에 비례해 넓히는 데 쓴다.
+ENEMY_DRIFT_PER_STEP = 1.5 * 0.012
+# 몹 폭이 1m이고 역투영 위치 오차가 ±0.5m쯤이라, 1m 반경으로는 같은 적이
+# 두 트랙으로 갈렸다(실측: 적 5마리에 트랙 21개). 두 적이 1.6m 안에 붙어
+# 있으면 하나로 세는 손해가 있지만, 갈라지는 쪽이 훨씬 흔하고 더 나쁘다.
+TRACK_BASE_RADIUS = 1.6
+TRACK_MAX_RADIUS = 4.0
+# phantom_until이 이 값을 넘으면 영구 배제로 본다.
+RETIRE_MARK = 10 ** 8
+
+
+@dataclass
+class EnemyTrack:
+    """움직임으로 확인된 적 하나. 외형이 아니라 '움직였다'가 근거다.
+
+    motion.py의 차분 블롭을 월드 좌표로 역투영해 쌓는다. 같은 적을 여러
+    번 보면 위치를 갱신하고, 새 위치가 기존 트랙에서 너무 멀면 새 적으로
+    친다. 죽은 뒤에도 리스트에 남겨 둔다 — QA에서 "적을 몇 마리 죽였나 /
+    어느 방에 있었나"를 답하려면 사후 기록이 필요하다.
+    """
+    x: float
+    z: float
+    room_key: str
+    first_step: int
+    last_step: int
+    sightings: int = 1
+    attacked: int = 0              # 마지막 목격 이후 겨냥해 때린 횟수
+    attacked_total: int = 0        # 누적. 목격으로 리셋되지 않는다 — 유령
+                                   # 트랙이 목격 한 번으로 부활해 다시 24대를
+                                   # 맞는 순환을 끊는 유일한 근거다.
+    last_attack_step: int = -999
+    colors: List[str] = field(default_factory=list)   # 팔레트 색 표본(QA용)
+    alive: bool = True
+    killed_step: int = -1
+    revived: int = 0               # 죽었다고 봤는데 다시 움직인 횟수(오판)
+    # 사거리 안에서 충분히 때렸는데도 사라지지도, 다시 움직이지도 않는
+    # 트랙. 역투영 위치가 틀렸다는 뜻이라 조준 대상에서 뺀다. 다만 **영구
+    # 배제는 하지 않는다** — 한동안만 쉰다. 영구로 뒀더니 방 안 트랙이
+    # 전부 유령으로 강등된 뒤 에이전트가 목표를 완전히 잃고 맞아 죽었다
+    # (시드 42: 793스텝 만에 HP 0).
+    phantom_until: int = -1
+
+    def age(self, step: int) -> int:
+        return step - self.last_step
+
+    def is_phantom(self, step: int) -> bool:
+        return step < self.phantom_until
+
+    def is_retired(self) -> bool:
+        """영구 배제. 목격이 거의 없는데 누적 공격만 쌓인 트랙."""
+        return self.phantom_until >= RETIRE_MARK
+
+    def aimable(self, step: int, fresh: int, min_sightings: int) -> bool:
+        """조준 대상으로 삼아도 되는가.
+
+        두 조건이 핵심이다.
+
+        * **최근에 봤어야 한다.** 적은 1.5 m/s로 걷기 때문에 오래된 트랙의
+          저장 위치는 이미 적이 없는 자리다. 기억용 보존 기간과 조준용
+          유효 기간은 완전히 다른 값이어야 한다.
+        * **한 번만 본 블롭은 안 된다.** 지평선 근처에서는 1픽셀 행이
+          1m가 넘어서, 멀리 있는 적이 엉뚱하게 가까운 좌표로 투영된다.
+          진짜로 다가오는 적은 목격이 금방 쌓인다(실측 12회).
+        """
+        return (self.alive and not self.is_phantom(step)
+                and self.sightings >= min_sightings
+                and self.age(step) <= fresh)
+
+
 @dataclass
 class RoomNode:
     key: str                       # 지금까지 본 것 중 가장 긴 이름 (정규화됨)
@@ -87,6 +157,77 @@ class WorldMap:
         self._cell_votes: List[float] = []
         self._cell_scores: Dict[float, float] = {}
         self.rooms: Dict[Tuple[int, int], RoomNode] = {}
+        # 적 트랙은 방 노드가 아니라 지도 전역에 둔다. 적은 방을 넘어
+        # 쫓아오므로(문을 통과한다) 방 단위로 묶으면 같은 적이 두 트랙으로
+        # 갈린다. 대신 트랙마다 처음 본 방 이름을 들고 있는다.
+        self.tracks: List[EnemyTrack] = []
+
+    # --- 적 트랙 -------------------------------------------------------
+    def note_motion(self, x: float, z: float, room_key: str,
+                    step: int) -> Tuple[EnemyTrack, bool]:
+        """움직임이 관측된 월드 좌표를 트랙에 반영. (트랙, 되살아났는지).
+
+        연결 반경은 경과 스텝에 비례해 넓힌다. 적은 1.5 m/s로 걷기 때문에
+        오래 못 본 트랙일수록 실제 위치가 멀리 가 있다. 고정 반경을 쓰면
+        방을 한 바퀴 돌고 온 사이에 같은 적이 새 트랙으로 갈린다.
+
+        **죽었다고 표시한 트랙도 후보에 넣는다.** 죽은 자리에서 다시 움직임이
+        나온다는 건 사망 판정이 틀렸다는 뜻이므로, 새 트랙을 만드는 대신
+        그 트랙을 되살린다. 이걸 안 했더니 "판정 → 재검출 → 새 트랙 →
+        재판정"이 반복되며 킬 수가 실제 3에 대해 19까지 부풀었다.
+        """
+        best, best_d = None, None
+        for t in self.tracks:
+            r = min(TRACK_MAX_RADIUS,
+                    TRACK_BASE_RADIUS + ENEMY_DRIFT_PER_STEP * t.age(step))
+            d = math.hypot(x - t.x, z - t.z)
+            if d <= r and (best_d is None or d < best_d):
+                best, best_d = t, d
+        if best is None:
+            t = EnemyTrack(x=x, z=z, room_key=room_key,
+                           first_step=step, last_step=step)
+            self.tracks.append(t)
+            return t, False
+        revived = not best.alive
+        if revived:
+            best.alive = True
+            best.killed_step = -1
+            best.revived += 1
+        # 새로 움직임이 보였다 = 살아서 거기 있다. 롤링 카운터만 리셋해서,
+        # 긴 교전에서 공격이 쌓여 진짜 적이 유령으로 강등되는 일을 막는다.
+        # attacked_total은 건드리지 않는다 — 이걸 같이 리셋했더니 유령
+        # 트랙이 목격 한 번마다 되살아나 24대씩 영원히 얻어맞았다
+        # (실측 시드 7: 목격 1회짜리 트랙 하나가 조준 공격 168회를 먹었다).
+        if not best.is_retired():
+            best.phantom_until = -1
+        best.attacked = 0
+        best.x, best.z = x, z
+        best.last_step = step
+        best.sightings += 1
+        return best, revived
+
+    def track_near(self, x: float, z: float, radius: float, step: int,
+                   max_age: int, min_sightings: int = 1) -> Optional[EnemyTrack]:
+        """(x, z) 근처의 조준 가능한 최신 트랙. 없으면 None."""
+        best, best_d = None, None
+        for t in self.tracks:
+            if not t.aimable(step, max_age, min_sightings):
+                continue
+            d = math.hypot(x - t.x, z - t.z)
+            if d <= radius and (best_d is None or d < best_d):
+                best, best_d = t, d
+        return best
+
+    def live_tracks(self, step: int, max_age: int,
+                    min_sightings: int = 1) -> List[EnemyTrack]:
+        return [t for t in self.tracks
+                if t.aimable(step, max_age, min_sightings)]
+
+    def killed_tracks(self) -> List[EnemyTrack]:
+        return [t for t in self.tracks if not t.alive]
+
+    def kill_count(self) -> int:
+        return len(self.killed_tracks())
 
     # --- 셀 크기 -------------------------------------------------------
     def vote_cell_size(self, scores: Dict[float, float]) -> float:

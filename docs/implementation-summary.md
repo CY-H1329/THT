@@ -35,7 +35,8 @@ generator and re-measuring from pixels — everything else is built on them:
 | `agent/mapper.py` | ~290 | Room graph on the cell grid, routing, map-predicted range |
 | `agent/pose.py` | ~75 | Dead-reckoned pose |
 | `agent/perception.py` | ~110 | Per-step frame → `Percept`, with shared/cached computation |
-| `agent/enemies.py` | ~190 | Mob detector (bearing, distance, confidence) |
+| `agent/enemies.py` | ~250 | Mob appearance detector + Miniworld palette read-out |
+| `agent/motion.py` | ~180 | Stationary-frame differencing → appearance-free enemy detection |
 | `agent/explorer.py` | ~870 | Exploration state machine, driving, combat policy |
 | `agent/ocr.py` | ~300 | (existing) HUD reader — optimised, see below |
 
@@ -44,7 +45,8 @@ Plus tooling outside the submission package:
 - `tmp/watch_agent.py` — live viewer with speed control, pause/step, and full
   run recording.
 - `tmp/run_explore.py` — scores the agent's map against env ground truth.
-- `docs/navigation.md` — design notes.
+- `docs/navigation.md` — navigation design notes.
+- `docs/enemies.md` — enemy detection / killing / kill-counting design notes.
 
 ---
 
