@@ -1,0 +1,120 @@
+{
+  "color": "slate",
+  "headings": [
+    0,
+    90,
+    180,
+    270,
+    0,
+    0
+  ],
+  "runs": [
+    {
+      "model": "openai/gpt-4o-mini",
+      "ok": true,
+      "error": null,
+      "latency_s": 6.9,
+      "cost_usd": 0.008,
+      "images": [
+        "taxi@90",
+        "plant@90",
+        "abstract@270",
+        "flamingo@270"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 4,
+      "n_objects": 1
+    },
+    {
+      "model": "openai/gpt-4o",
+      "ok": true,
+      "error": null,
+      "latency_s": 2.74,
+      "cost_usd": 0.01,
+      "images": [
+        "car@90",
+        "plant@90",
+        "texture@270",
+        "flamingo@270"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 4,
+      "n_objects": 1
+    },
+    {
+      "model": "openai/gpt-5-nano",
+      "ok": true,
+      "error": null,
+      "latency_s": 90.6,
+      "cost_usd": 0.0028,
+      "images": [
+        "car@None",
+        "plant@None"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 2,
+      "n_objects": 1
+    },
+    {
+      "model": "openai/gpt-5.4-nano",
+      "ok": true,
+      "error": null,
+      "latency_s": 2.5,
+      "cost_usd": 0.0006,
+      "images": [],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 0,
+      "n_objects": 1
+    },
+    {
+      "model": "openai/gpt-5.4-mini",
+      "ok": true,
+      "error": null,
+      "latency_s": 2.81,
+      "cost_usd": 0.0027,
+      "images": [
+        "taxi@90",
+        "plant@90",
+        "rock@270",
+        "flower@270"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 4,
+      "n_objects": 1
+    },
+    {
+      "model": "openai/gpt-5.5",
+      "ok": true,
+      "error": null,
+      "latency_s": 40.55,
+      "cost_usd": 0.0978,
+      "images": [
+        "train@90",
+        "plant@90",
+        "feather@270",
+        "flower@270"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 4,
+      "n_objects": 1
+    }
+  ]
+}

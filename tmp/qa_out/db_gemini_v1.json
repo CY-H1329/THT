@@ -1,0 +1,1329 @@
+{
+  "game_look": {
+    "floor": "two-tone checkerboard tiles",
+    "ceiling": "plain grey concrete",
+    "turn_step_deg": 15,
+    "doors_only_cardinal": true
+  },
+  "rooms": {
+    "Coral Vestibule": {
+      "wall_color": "brick",
+      "images": [
+        {
+          "desc": "a painting of a landscape with trees and a body of water",
+          "category": "landscape painting",
+          "wall_dir": 180,
+          "confidence": 0.9
+        }
+      ],
+      "image_count": 1,
+      "images_per_wall": {
+        "0": 0,
+        "90": 0,
+        "180": 1,
+        "270": 0
+      },
+      "objects": [
+        {
+          "name": "barrel",
+          "color": "blue",
+          "confidence": 0.9
+        },
+        {
+          "name": "office chair",
+          "color": "grey",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 2,
+      "doors": {
+        "0": {
+          "status": "open",
+          "leads_to": "Vermilion Salon",
+          "neighbor_color": "slate"
+        },
+        "90": {
+          "status": "open",
+          "leads_to": "Saffron Annex",
+          "neighbor_color": "teal"
+        },
+        "180": {
+          "status": "open",
+          "leads_to": "Topaz Conse…",
+          "neighbor_color": "sand"
+        },
+        "270": {
+          "status": "open",
+          "leads_to": "Verdant Annex",
+          "neighbor_color": "plum"
+        }
+      },
+      "door_count": 4,
+      "enemies": [],
+      "has_locked_door": false,
+      "damage_taken": 0,
+      "surveyed": true,
+      "visits": 5,
+      "n_frames": 851
+    },
+    "Vermilion Salon": {
+      "wall_color": "slate",
+      "images": [
+        {
+          "desc": "brown furry animal",
+          "category": "animal",
+          "wall_dir": 270,
+          "confidence": 0.9
+        }
+      ],
+      "image_count": 1,
+      "images_per_wall": {
+        "0": 0,
+        "90": 0,
+        "180": 0,
+        "270": 1
+      },
+      "objects": [
+        {
+          "name": "rubber duck",
+          "color": "yellow",
+          "confidence": 0.9
+        },
+        {
+          "name": "traffic cone",
+          "color": "orange",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 2,
+      "doors": {
+        "0": {
+          "status": "open",
+          "leads_to": "Crimson Belfry",
+          "neighbor_color": null
+        },
+        "90": {
+          "status": "open",
+          "leads_to": "Glacial Annex",
+          "neighbor_color": "mustard"
+        },
+        "180": {
+          "status": "open",
+          "leads_to": "Coral Vestibule",
+          "neighbor_color": "terracotta"
+        },
+        "270": {
+          "status": "open",
+          "leads_to": "Citrine  Library",
+          "neighbor_color": null
+        }
+      },
+      "door_count": 4,
+      "enemies": [
+        {
+          "shirt_color": "yellow",
+          "pants_color": "green",
+          "skin_color": null,
+          "body_shape": "tall",
+          "desc": "tall yellow shirt, green pants",
+          "seen_alive": true,
+          "killed": false,
+          "confidence": 0.9
+        }
+      ],
+      "has_locked_door": false,
+      "damage_taken": 2,
+      "surveyed": true,
+      "visits": 5,
+      "n_frames": 1003
+    },
+    "Crimson Belfry": {
+      "wall_color": "olive",
+      "images": [
+        {
+          "desc": "a brown bird with a dark background",
+          "category": "bird",
+          "wall_dir": 90,
+          "confidence": 0.9
+        },
+        {
+          "desc": "a painting with red and white shapes on a light background",
+          "category": "abstract painting",
+          "wall_dir": 270,
+          "confidence": 0.9
+        },
+        {
+          "desc": "a roaring lion with an open mouth",
+          "category": "lion",
+          "wall_dir": 270,
+          "confidence": 0.95
+        }
+      ],
+      "image_count": 3,
+      "images_per_wall": {
+        "0": 0,
+        "90": 1,
+        "180": 0,
+        "270": 2
+      },
+      "objects": [
+        {
+          "name": "rubber duck",
+          "color": "yellow",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 1,
+      "doors": {
+        "0": {
+          "status": "locked",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "90": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "180": {
+          "status": "open",
+          "leads_to": "Vermilion Salon",
+          "neighbor_color": "teal"
+        },
+        "270": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        }
+      },
+      "door_count": 2,
+      "enemies": [],
+      "has_locked_door": true,
+      "damage_taken": 3,
+      "surveyed": true,
+      "visits": 2,
+      "n_frames": 874
+    },
+    "Glacial Annex": {
+      "wall_color": "mustard",
+      "images": [
+        {
+          "desc": "two sheep, one large and one small",
+          "category": "sheep",
+          "wall_dir": 180,
+          "confidence": 0.9
+        },
+        {
+          "desc": "a close up of blue feathers",
+          "category": "feathers",
+          "wall_dir": 270,
+          "confidence": 0.9
+        },
+        {
+          "desc": "a purple flower with a yellow center",
+          "category": "flower",
+          "wall_dir": 0,
+          "confidence": 0.9
+        },
+        {
+          "desc": "a fish swimming in water",
+          "category": "fish",
+          "wall_dir": 0,
+          "confidence": 0.9
+        }
+      ],
+      "image_count": 4,
+      "images_per_wall": {
+        "0": 2,
+        "90": 0,
+        "180": 1,
+        "270": 1
+      },
+      "objects": [
+        {
+          "name": "traffic cone",
+          "color": "blue",
+          "confidence": 0.9
+        },
+        {
+          "name": "rubber duck",
+          "color": "yellow",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 2,
+      "doors": {
+        "0": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "90": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "180": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "270": {
+          "status": "open",
+          "leads_to": "Vermilion Salon",
+          "neighbor_color": "slate"
+        }
+      },
+      "door_count": 1,
+      "enemies": [
+        {
+          "shirt_color": "blue",
+          "pants_color": "grey",
+          "skin_color": "yellow",
+          "body_shape": "short",
+          "desc": "blue shirt, grey pants, yellow head",
+          "seen_alive": true,
+          "killed": false,
+          "confidence": 0.9
+        }
+      ],
+      "has_locked_door": false,
+      "damage_taken": 0,
+      "surveyed": true,
+      "visits": 1,
+      "n_frames": 305
+    },
+    "Citrine  Library": {
+      "wall_color": "sage",
+      "images": [
+        {
+          "desc": "dark abstract image",
+          "category": "abstract art",
+          "wall_dir": 270,
+          "confidence": 0.9
+        },
+        {
+          "desc": "image of a car",
+          "category": "car",
+          "wall_dir": 0,
+          "confidence": 0.9
+        }
+      ],
+      "image_count": 2,
+      "images_per_wall": {
+        "0": 1,
+        "90": 0,
+        "180": 0,
+        "270": 1
+      },
+      "objects": [
+        {
+          "name": "rubber duck",
+          "color": "yellow",
+          "confidence": 0.9
+        },
+        {
+          "name": "barrel",
+          "color": "blue",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 2,
+      "doors": {
+        "0": {
+          "status": "open",
+          "leads_to": "Ashen Belfry",
+          "neighbor_color": null
+        },
+        "90": {
+          "status": "open",
+          "leads_to": "Vermilion Salon",
+          "neighbor_color": "slate"
+        },
+        "180": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "270": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        }
+      },
+      "door_count": 2,
+      "enemies": [
+        {
+          "shirt_color": "green",
+          "pants_color": "grey",
+          "skin_color": "yellow",
+          "body_shape": "short",
+          "desc": "A short enemy with a green shirt, grey pants, and yellow skin.",
+          "seen_alive": true,
+          "killed": false,
+          "confidence": 0.9
+        }
+      ],
+      "has_locked_door": false,
+      "damage_taken": 3,
+      "surveyed": true,
+      "visits": 2,
+      "n_frames": 535
+    },
+    "Ashen Belfry": {
+      "wall_color": "denim",
+      "images": [
+        {
+          "desc": "airplane on tarmac",
+          "category": "airplane",
+          "wall_dir": 0,
+          "confidence": 0.9
+        },
+        {
+          "desc": "red motorcycle",
+          "category": "motorcycle",
+          "wall_dir": 90,
+          "confidence": 0.9
+        },
+        {
+          "desc": "black and white photo of a person's face",
+          "category": "face",
+          "wall_dir": 90,
+          "confidence": 0.9
+        }
+      ],
+      "image_count": 3,
+      "images_per_wall": {
+        "0": 1,
+        "90": 2,
+        "180": 0,
+        "270": 0
+      },
+      "objects": [
+        {
+          "name": "rubber duck",
+          "color": "yellow",
+          "confidence": 0.9
+        },
+        {
+          "name": "traffic cone",
+          "color": "orange",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 2,
+      "doors": {
+        "0": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "90": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "180": {
+          "status": "open",
+          "leads_to": "Citrine  Library",
+          "neighbor_color": null
+        },
+        "270": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        }
+      },
+      "door_count": 1,
+      "enemies": [],
+      "has_locked_door": false,
+      "damage_taken": 0,
+      "surveyed": true,
+      "visits": 1,
+      "n_frames": 273
+    },
+    "Saffron Annex": {
+      "wall_color": "teal",
+      "images": [
+        {
+          "desc": "a bee on a yellow rose",
+          "category": "flower",
+          "wall_dir": 0,
+          "confidence": 0.9
+        },
+        {
+          "desc": "a fish swimming in water",
+          "category": "fish",
+          "wall_dir": 0,
+          "confidence": 0.9
+        },
+        {
+          "desc": "a castle on a hill",
+          "category": "castle",
+          "wall_dir": 180,
+          "confidence": 0.9
+        }
+      ],
+      "image_count": 3,
+      "images_per_wall": {
+        "0": 2,
+        "90": 0,
+        "180": 1,
+        "270": 0
+      },
+      "objects": [
+        {
+          "name": "tree",
+          "color": "green",
+          "confidence": 0.9
+        },
+        {
+          "name": "barrel",
+          "color": "blue",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 2,
+      "doors": {
+        "0": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "90": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "180": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "270": {
+          "status": "open",
+          "leads_to": "Coral Vestibule",
+          "neighbor_color": "plum"
+        }
+      },
+      "door_count": 1,
+      "enemies": [],
+      "has_locked_door": false,
+      "damage_taken": 0,
+      "surveyed": true,
+      "visits": 1,
+      "n_frames": 252
+    },
+    "Verdant Annex": {
+      "wall_color": "slate",
+      "images": [
+        {
+          "desc": "white flowers on dark background",
+          "category": "flowers",
+          "wall_dir": 0,
+          "confidence": 0.9
+        },
+        {
+          "desc": "tall grass and a dark pole against a blue sky",
+          "category": "landscape",
+          "wall_dir": 180,
+          "confidence": 0.9
+        },
+        {
+          "desc": "water spouts in the ocean",
+          "category": "ocean",
+          "wall_dir": 270,
+          "confidence": 0.9
+        }
+      ],
+      "image_count": 3,
+      "images_per_wall": {
+        "0": 1,
+        "90": 0,
+        "180": 1,
+        "270": 1
+      },
+      "objects": [
+        {
+          "name": "barrel",
+          "color": "blue",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 1,
+      "doors": {
+        "0": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "90": {
+          "status": "open",
+          "leads_to": "Coral Vestibule",
+          "neighbor_color": "teal"
+        },
+        "180": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "270": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        }
+      },
+      "door_count": 1,
+      "enemies": [],
+      "has_locked_door": false,
+      "damage_taken": 0,
+      "surveyed": true,
+      "visits": 1,
+      "n_frames": 232
+    },
+    "Topaz Conse…": {
+      "wall_color": "sage",
+      "images": [
+        {
+          "desc": "person in a field",
+          "category": "person",
+          "wall_dir": 90,
+          "confidence": 0.9
+        },
+        {
+          "desc": "brown cow with ear tags",
+          "category": "cow",
+          "wall_dir": 270,
+          "confidence": 0.9
+        }
+      ],
+      "image_count": 2,
+      "images_per_wall": {
+        "0": 0,
+        "90": 1,
+        "180": 0,
+        "270": 1
+      },
+      "objects": [
+        {
+          "name": "traffic cone",
+          "color": "orange",
+          "confidence": 0.9
+        },
+        {
+          "name": "office chair",
+          "color": "blue",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 2,
+      "doors": {
+        "0": {
+          "status": "open",
+          "leads_to": "Coral Vestibule",
+          "neighbor_color": "rust"
+        },
+        "90": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "180": {
+          "status": "open",
+          "leads_to": "Umber Refect…",
+          "neighbor_color": "sand"
+        },
+        "270": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        }
+      },
+      "door_count": 2,
+      "enemies": [],
+      "has_locked_door": false,
+      "damage_taken": 0,
+      "surveyed": true,
+      "visits": 2,
+      "n_frames": 401
+    },
+    "Umber Refect…": {
+      "wall_color": "brick",
+      "images": [
+        {
+          "desc": "white deer with antlers in a snowy forest",
+          "category": "deer",
+          "wall_dir": 90,
+          "confidence": 0.9
+        },
+        {
+          "desc": "cityscape with tall buildings under a blue sky",
+          "category": "cityscape",
+          "wall_dir": 180,
+          "confidence": 0.9
+        },
+        {
+          "desc": "abstract dark image with a glowing figure",
+          "category": "abstract",
+          "wall_dir": 180,
+          "confidence": 0.9
+        }
+      ],
+      "image_count": 3,
+      "images_per_wall": {
+        "0": 0,
+        "90": 1,
+        "180": 2,
+        "270": 0
+      },
+      "objects": [
+        {
+          "name": "office chair",
+          "color": "black",
+          "confidence": 0.9
+        },
+        {
+          "name": "rubber duck",
+          "color": "yellow",
+          "confidence": 0.9
+        }
+      ],
+      "object_count": 2,
+      "doors": {
+        "0": {
+          "status": "open",
+          "leads_to": "Topaz Conse…",
+          "neighbor_color": "sand"
+        },
+        "90": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "180": {
+          "status": "open",
+          "leads_to": "Citrine Court",
+          "neighbor_color": null
+        },
+        "270": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        }
+      },
+      "door_count": 2,
+      "enemies": [],
+      "has_locked_door": false,
+      "damage_taken": 0,
+      "surveyed": true,
+      "visits": 2,
+      "n_frames": 345
+    },
+    "Citrine Court": {
+      "wall_color": "sage",
+      "images": [
+        {
+          "desc": "abstract black and white lines",
+          "category": "abstract art",
+          "wall_dir": 0,
+          "confidence": 0.9
+        },
+        {
+          "desc": "bald eagle head",
+          "category": "eagle",
+          "wall_dir": 90,
+          "confidence": 0.9
+        },
+        {
+          "desc": "sunset over water",
+          "category": "landscape",
+          "wall_dir": 90,
+          "confidence": 0.9
+        },
+        {
+          "desc": "cathedral with spires",
+          "category": "architecture",
+          "wall_dir": 180,
+          "confidence": 0.95
+        }
+      ],
+      "image_count": 4,
+      "images_per_wall": {
+        "0": 1,
+        "90": 2,
+        "180": 1,
+        "270": 0
+      },
+      "objects": [
+        {
+          "name": "barrel",
+          "color": "blue",
+          "confidence": 0.95
+        },
+        {
+          "name": "rubber duck",
+          "color": "yellow",
+          "confidence": 0.95
+        }
+      ],
+      "object_count": 2,
+      "doors": {
+        "0": {
+          "status": "open",
+          "leads_to": "Umber Refect…",
+          "neighbor_color": "sand"
+        },
+        "90": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "180": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        },
+        "270": {
+          "status": "wall",
+          "leads_to": null,
+          "neighbor_color": null
+        }
+      },
+      "door_count": 1,
+      "enemies": [],
+      "has_locked_door": false,
+      "damage_taken": 0,
+      "surveyed": true,
+      "visits": 1,
+      "n_frames": 235
+    }
+  },
+  "visited_order": [
+    "Coral Vestibule",
+    "Vermilion Salon",
+    "Crimson Belfry",
+    "Glacial Annex",
+    "Citrine  Library",
+    "Ashen Belfry",
+    "Saffron Annex",
+    "Verdant Annex",
+    "Topaz Conse…",
+    "Umber Refect…",
+    "Citrine Court"
+  ],
+  "hint_text": null,
+  "key_hint_room": null,
+  "key_found": false,
+  "key_found_in": null,
+  "key_consumed": false,
+  "locked_door_room": "Crimson Belfry",
+  "unlocked_door": false,
+  "killed_enemies": 2,
+  "damage_taken_total": 8,
+  "hp_start": 10,
+  "hp_end": 2,
+  "hp_max": 10,
+  "ending": "unknown",
+  "frozen": true,
+  "_meta": {
+    "n_frames": 5306,
+    "n_surveys": 44,
+    "n_witness": 5,
+    "total_cost_usd": 0.06478940000000001,
+    "strategy": "sequential_1",
+    "dry_run": false,
+    "events": [
+      {
+        "kind": "survey",
+        "room": "Coral Vestibule",
+        "ok": true,
+        "error": null,
+        "cost": 0.0010718,
+        "latency": 4.349190374996397,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Coral Vestibule",
+        "ok": true,
+        "error": null,
+        "cost": 0.0010709,
+        "latency": 2.5008286669908557,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Coral Vestibule",
+        "ok": true,
+        "error": null,
+        "cost": 0.0010840000000000001,
+        "latency": 2.3511140000046,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Coral Vestibule",
+        "ok": true,
+        "error": null,
+        "cost": 0.0008668,
+        "latency": 2.799134792003315,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Vermilion Salon",
+        "ok": true,
+        "error": null,
+        "cost": 0.001153,
+        "latency": 2.684949082991807,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Vermilion Salon",
+        "ok": true,
+        "error": null,
+        "cost": 0.0010843,
+        "latency": 2.2721946670062607,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Vermilion Salon",
+        "ok": true,
+        "error": null,
+        "cost": 0.0010927,
+        "latency": 3.7598744170099963,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Vermilion Salon",
+        "ok": true,
+        "error": null,
+        "cost": 0.0010936000000000001,
+        "latency": 2.352866792003624,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Crimson Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0009843,
+        "latency": 2.15631733299233,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Crimson Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0008871,
+        "latency": 2.092738000006648,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Crimson Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0014751,
+        "latency": 3.302853500004858,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Crimson Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0014912000000000003,
+        "latency": 3.0124866669939365,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "witness",
+        "room": "Crimson Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0001385,
+        "latency": 1.2352397920039948,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Glacial Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0009743,
+        "latency": 2.635870875004912,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Glacial Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0009971000000000001,
+        "latency": 7.583411125000566,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Glacial Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0014351000000000001,
+        "latency": 3.1137374579993775,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Glacial Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0018809000000000002,
+        "latency": 3.592198541999096,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "witness",
+        "room": "Vermilion Salon",
+        "ok": true,
+        "error": null,
+        "cost": 0.0001385,
+        "latency": 1.3934688750014175,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Citrine  Library",
+        "ok": true,
+        "error": null,
+        "cost": 0.0013805,
+        "latency": 2.8715658339933725,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Citrine  Library",
+        "ok": true,
+        "error": null,
+        "cost": 0.0016092,
+        "latency": 3.0986247500113677,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Citrine  Library",
+        "ok": true,
+        "error": null,
+        "cost": 0.0018403,
+        "latency": 3.8129702500009444,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Citrine  Library",
+        "ok": true,
+        "error": null,
+        "cost": 0.0018278,
+        "latency": 3.715824667000561,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "witness",
+        "room": "Citrine  Library",
+        "ok": true,
+        "error": null,
+        "cost": 0.0004533,
+        "latency": 1.3587152079999214,
+        "n_frames": 3,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Ashen Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0008749000000000001,
+        "latency": 2.316810042000725,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Ashen Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0014339,
+        "latency": 3.078569958001026,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Ashen Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0017384000000000002,
+        "latency": 3.352236749997246,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Ashen Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0011922,
+        "latency": 2.6580552499945043,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Saffron Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0011043,
+        "latency": 2.551905040993006,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Saffron Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0013117,
+        "latency": 2.7957412079995265,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Saffron Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0014448000000000002,
+        "latency": 4.003697166990605,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Saffron Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.00118,
+        "latency": 2.9369265000132145,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Verdant Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0011021,
+        "latency": 2.491064333007671,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Verdant Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0011992,
+        "latency": 2.9229736249981215,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Verdant Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0013355,
+        "latency": 3.7888487500022165,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Verdant Annex",
+        "ok": true,
+        "error": null,
+        "cost": 0.0014672,
+        "latency": 3.7185920830088435,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Topaz Conse…",
+        "ok": true,
+        "error": null,
+        "cost": 0.0009861,
+        "latency": 4.964942834005342,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Topaz Conse…",
+        "ok": true,
+        "error": null,
+        "cost": 0.0012042,
+        "latency": 3.3163837920001242,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Topaz Conse…",
+        "ok": true,
+        "error": null,
+        "cost": 0.0011688,
+        "latency": 2.848536999998032,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Topaz Conse…",
+        "ok": true,
+        "error": null,
+        "cost": 0.0010939,
+        "latency": 7.7963239590026205,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Umber Refect…",
+        "ok": true,
+        "error": null,
+        "cost": 0.0010733000000000001,
+        "latency": 6.564678292008466,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Umber Refect…",
+        "ok": true,
+        "error": null,
+        "cost": 0.0012099,
+        "latency": 2.643340957991313,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Umber Refect…",
+        "ok": true,
+        "error": null,
+        "cost": 0.0015532,
+        "latency": 3.76634654100053,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Umber Refect…",
+        "ok": true,
+        "error": null,
+        "cost": 0.0017145,
+        "latency": 3.3711135409976123,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Citrine Court",
+        "ok": true,
+        "error": null,
+        "cost": 0.0013971,
+        "latency": 3.6512289159873035,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Citrine Court",
+        "ok": true,
+        "error": null,
+        "cost": 0.0015177,
+        "latency": 3.089020082989009,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Citrine Court",
+        "ok": true,
+        "error": null,
+        "cost": 0.0016591000000000002,
+        "latency": 3.4473922080069315,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "survey",
+        "room": "Citrine Court",
+        "ok": true,
+        "error": null,
+        "cost": 0.0016749000000000002,
+        "latency": 3.177744500004337,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "witness",
+        "room": "Vermilion Salon",
+        "ok": true,
+        "error": null,
+        "cost": 0.0001385,
+        "latency": 1.236520209000446,
+        "n_frames": 1,
+        "headings": null
+      },
+      {
+        "kind": "witness",
+        "room": "Crimson Belfry",
+        "ok": true,
+        "error": null,
+        "cost": 0.0002259,
+        "latency": 1.1646586659917375,
+        "n_frames": 2,
+        "headings": null
+      }
+    ],
+    "refine_cost_usd": 0.0067578000000000004
+  }
+}

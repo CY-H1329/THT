@@ -1,0 +1,774 @@
+{
+  "n_frames": 5306,
+  "n_rooms": 11,
+  "rooms": {
+    "Coral Vestibule": {
+      "n_frames": 851,
+      "color_votes": {
+        "brick": 327,
+        "teal": 16,
+        "slate": 14,
+        "sage": 20
+      },
+      "hp_min": 5,
+      "hp_max": 10,
+      "wall_color": "brick",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 0,
+          "end_i": 208,
+          "n": 209
+        },
+        {
+          "start_i": 2450,
+          "end_i": 2614,
+          "n": 165
+        },
+        {
+          "start_i": 2867,
+          "end_i": 3000,
+          "n": 134
+        },
+        {
+          "start_i": 3233,
+          "end_i": 3443,
+          "n": 211
+        },
+        {
+          "start_i": 4425,
+          "end_i": 4556,
+          "n": 132
+        }
+      ]
+    },
+    "Vermilion Salon": {
+      "n_frames": 1003,
+      "color_votes": {
+        "slate": 430,
+        "mustard": 14,
+        "brick": 20
+      },
+      "hp_min": 4,
+      "hp_max": 10,
+      "wall_color": "slate",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 209,
+          "end_i": 421,
+          "n": 213
+        },
+        {
+          "start_i": 681,
+          "end_i": 842,
+          "n": 162
+        },
+        {
+          "start_i": 1148,
+          "end_i": 1433,
+          "n": 286
+        },
+        {
+          "start_i": 2242,
+          "end_i": 2449,
+          "n": 208
+        },
+        {
+          "start_i": 4557,
+          "end_i": 4690,
+          "n": 134
+        }
+      ]
+    },
+    "Crimson Belfry": {
+      "n_frames": 874,
+      "color_votes": {
+        "plum": 195,
+        "slate": 20,
+        "olive": 207
+      },
+      "hp_min": 2,
+      "hp_max": 10,
+      "wall_color": "olive",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 422,
+          "end_i": 680,
+          "n": 259
+        },
+        {
+          "start_i": 4691,
+          "end_i": 5305,
+          "n": 615
+        }
+      ]
+    },
+    "Glacial Annex": {
+      "n_frames": 305,
+      "color_votes": {
+        "mustard": 172,
+        "olive": 119
+      },
+      "hp_min": 9,
+      "hp_max": 9,
+      "wall_color": "mustard",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 843,
+          "end_i": 1147,
+          "n": 305
+        }
+      ]
+    },
+    "Citrine  Library": {
+      "n_frames": 535,
+      "color_votes": {
+        "slate": 222,
+        "sage": 293
+      },
+      "hp_min": 5,
+      "hp_max": 8,
+      "wall_color": "sage",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 1434,
+          "end_i": 1765,
+          "n": 332
+        },
+        {
+          "start_i": 2039,
+          "end_i": 2241,
+          "n": 203
+        }
+      ]
+    },
+    "Ashen Belfry": {
+      "n_frames": 273,
+      "color_votes": {
+        "denim": 99,
+        "sage": 18
+      },
+      "hp_min": 5,
+      "hp_max": 5,
+      "wall_color": "denim",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 1766,
+          "end_i": 2038,
+          "n": 273
+        }
+      ]
+    },
+    "Saffron Annex": {
+      "n_frames": 252,
+      "color_votes": {
+        "teal": 112
+      },
+      "hp_min": 5,
+      "hp_max": 5,
+      "wall_color": "teal",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 2615,
+          "end_i": 2866,
+          "n": 252
+        }
+      ]
+    },
+    "Verdant Annex": {
+      "n_frames": 232,
+      "color_votes": {
+        "slate": 112,
+        "sage": 104,
+        "brick": 16
+      },
+      "hp_min": 5,
+      "hp_max": 5,
+      "wall_color": "slate",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 3001,
+          "end_i": 3232,
+          "n": 232
+        }
+      ]
+    },
+    "Topaz Conse…": {
+      "n_frames": 401,
+      "color_votes": {
+        "sage": 211,
+        "olive": 150,
+        "brick": 20
+      },
+      "hp_min": 5,
+      "hp_max": 5,
+      "wall_color": "sage",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 3444,
+          "end_i": 3710,
+          "n": 267
+        },
+        {
+          "start_i": 4291,
+          "end_i": 4424,
+          "n": 134
+        }
+      ]
+    },
+    "Umber Refect…": {
+      "n_frames": 345,
+      "color_votes": {
+        "brick": 305,
+        "sage": 20,
+        "olive": 20
+      },
+      "hp_min": 5,
+      "hp_max": 5,
+      "wall_color": "brick",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 3711,
+          "end_i": 3921,
+          "n": 211
+        },
+        {
+          "start_i": 4157,
+          "end_i": 4290,
+          "n": 134
+        }
+      ]
+    },
+    "Citrine Court": {
+      "n_frames": 235,
+      "color_votes": {
+        "sage": 120,
+        "olive": 95,
+        "brick": 20
+      },
+      "hp_min": 5,
+      "hp_max": 5,
+      "wall_color": "sage",
+      "unique_headings": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240,
+        255,
+        270,
+        285,
+        300,
+        315,
+        330,
+        345
+      ],
+      "spins": [],
+      "visits": [
+        {
+          "start_i": 3922,
+          "end_i": 4156,
+          "n": 235
+        }
+      ]
+    }
+  },
+  "hints": [],
+  "events_n": 30,
+  "damage_events": [
+    {
+      "type": "damage",
+      "step": 518,
+      "room": "Crimson Belfry",
+      "amount": 1,
+      "hp_after": 9
+    },
+    {
+      "type": "damage",
+      "step": 1415,
+      "room": "Vermilion Salon",
+      "amount": 1,
+      "hp_after": 8
+    },
+    {
+      "type": "damage",
+      "step": 1440,
+      "room": "Citrine  Library",
+      "amount": 1,
+      "hp_after": 7
+    },
+    {
+      "type": "damage",
+      "step": 1511,
+      "room": "Citrine  Library",
+      "amount": 1,
+      "hp_after": 6
+    },
+    {
+      "type": "damage",
+      "step": 1533,
+      "room": "Citrine  Library",
+      "amount": 1,
+      "hp_after": 5
+    },
+    {
+      "type": "damage",
+      "step": 4641,
+      "room": "Vermilion Salon",
+      "amount": 1,
+      "hp_after": 4
+    },
+    {
+      "type": "damage",
+      "step": 4774,
+      "room": "Crimson Belfry",
+      "amount": 1,
+      "hp_after": 3
+    },
+    {
+      "type": "damage",
+      "step": 4803,
+      "room": "Crimson Belfry",
+      "amount": 1,
+      "hp_after": 2
+    }
+  ],
+  "transitions": [
+    {
+      "type": "transition",
+      "step": 211,
+      "from": "Coral Vestibule",
+      "to": "Vermilion Salon",
+      "heading": 0
+    },
+    {
+      "type": "transition",
+      "step": 424,
+      "from": "Vermilion Salon",
+      "to": "Crimson Belfry",
+      "heading": 0
+    },
+    {
+      "type": "transition",
+      "step": 683,
+      "from": "Crimson Belfry",
+      "to": "Vermilion Salon",
+      "heading": 180
+    },
+    {
+      "type": "transition",
+      "step": 845,
+      "from": "Vermilion Salon",
+      "to": "Glacial Annex",
+      "heading": 90
+    },
+    {
+      "type": "transition",
+      "step": 1150,
+      "from": "Glacial Annex",
+      "to": "Vermilion Salon",
+      "heading": 270
+    },
+    {
+      "type": "transition",
+      "step": 1436,
+      "from": "Vermilion Salon",
+      "to": "Citrine  Library",
+      "heading": 270
+    },
+    {
+      "type": "transition",
+      "step": 1768,
+      "from": "Citrine  Library",
+      "to": "Ashen Belfry",
+      "heading": 0
+    },
+    {
+      "type": "transition",
+      "step": 2041,
+      "from": "Ashen Belfry",
+      "to": "Citrine  Library",
+      "heading": 180
+    },
+    {
+      "type": "transition",
+      "step": 2244,
+      "from": "Citrine  Library",
+      "to": "Vermilion Salon",
+      "heading": 105
+    },
+    {
+      "type": "transition",
+      "step": 2452,
+      "from": "Vermilion Salon",
+      "to": "Coral Vestibule",
+      "heading": 180
+    },
+    {
+      "type": "transition",
+      "step": 2617,
+      "from": "Coral Vestibule",
+      "to": "Saffron Annex",
+      "heading": 90
+    },
+    {
+      "type": "transition",
+      "step": 2869,
+      "from": "Saffron Annex",
+      "to": "Coral Vestibule",
+      "heading": 270
+    },
+    {
+      "type": "transition",
+      "step": 3003,
+      "from": "Coral Vestibule",
+      "to": "Verdant Annex",
+      "heading": 270
+    },
+    {
+      "type": "transition",
+      "step": 3235,
+      "from": "Verdant Annex",
+      "to": "Coral Vestibule",
+      "heading": 90
+    },
+    {
+      "type": "transition",
+      "step": 3446,
+      "from": "Coral Vestibule",
+      "to": "Topaz Conse…",
+      "heading": 180
+    },
+    {
+      "type": "transition",
+      "step": 3713,
+      "from": "Topaz Conse…",
+      "to": "Umber Refect…",
+      "heading": 180
+    },
+    {
+      "type": "transition",
+      "step": 3924,
+      "from": "Umber Refect…",
+      "to": "Citrine Court",
+      "heading": 180
+    },
+    {
+      "type": "transition",
+      "step": 4159,
+      "from": "Citrine Court",
+      "to": "Umber Refect…",
+      "heading": 0
+    },
+    {
+      "type": "transition",
+      "step": 4293,
+      "from": "Umber Refect…",
+      "to": "Topaz Conse…",
+      "heading": 0
+    },
+    {
+      "type": "transition",
+      "step": 4427,
+      "from": "Topaz Conse…",
+      "to": "Coral Vestibule",
+      "heading": 0
+    },
+    {
+      "type": "transition",
+      "step": 4559,
+      "from": "Coral Vestibule",
+      "to": "Vermilion Salon",
+      "heading": 0
+    },
+    {
+      "type": "transition",
+      "step": 4693,
+      "from": "Vermilion Salon",
+      "to": "Crimson Belfry",
+      "heading": 0
+    }
+  ],
+  "key_events": []
+}

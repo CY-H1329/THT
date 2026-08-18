@@ -1,0 +1,735 @@
+{
+  "rooms": {
+    "Vermilion Salon": {
+      "why": "4 portes — photos du voisin (Citrine/Glacial) visibles dans le portail",
+      "color": "slate",
+      "picks": [
+        {
+          "step": 209,
+          "heading": 0
+        },
+        {
+          "step": 322,
+          "heading": 90
+        },
+        {
+          "step": 310,
+          "heading": 180
+        },
+        {
+          "step": 298,
+          "heading": 270
+        },
+        {
+          "step": 208,
+          "heading": 0
+        },
+        {
+          "step": 210,
+          "heading": 0
+        }
+      ],
+      "runs": {
+        "4o_nomask": {
+          "ok": true,
+          "error": null,
+          "latency_s": 3.2,
+          "cost_usd": 0.0104,
+          "model": "openai/gpt-4o",
+          "raw": {
+            "images": [
+              "foliage@0",
+              "texture@0",
+              "car@90",
+              "bird@270"
+            ],
+            "n_images": 4,
+            "objects": [
+              "rubber duck"
+            ],
+            "n_objects": 1,
+            "enemies": 1,
+            "doors": [
+              "0",
+              "90",
+              "180",
+              "270"
+            ]
+          },
+          "db": {
+            "images": [
+              {
+                "desc": "green foliage",
+                "category": "foliage",
+                "wall_dir": 0,
+                "confidence": 0.9
+              },
+              {
+                "desc": "blue texture",
+                "category": "texture",
+                "wall_dir": 0,
+                "confidence": 0.9
+              },
+              {
+                "desc": "yellow car",
+                "category": "car",
+                "wall_dir": 90,
+                "confidence": 0.9
+              },
+              {
+                "desc": "red bird",
+                "category": "bird",
+                "wall_dir": 270,
+                "confidence": 0.9
+              }
+            ],
+            "objects": [
+              {
+                "name": "rubber duck",
+                "color": "yellow",
+                "confidence": 0.95
+              }
+            ],
+            "enemies": [
+              {
+                "shirt_color": "blue",
+                "pants_color": "yellow",
+                "skin_color": "yellow",
+                "body_shape": "tall",
+                "desc": "tall blue-shirt humanoid",
+                "seen_alive": true,
+                "killed": false,
+                "confidence": 0.9
+              }
+            ],
+            "doors": {
+              "0": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "plum"
+              },
+              "90": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "mustard"
+              },
+              "180": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "brick"
+              },
+              "270": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "lavender"
+              }
+            }
+          }
+        },
+        "4o_mask": {
+          "ok": true,
+          "error": null,
+          "latency_s": 2.93,
+          "cost_usd": 0.01,
+          "model": "openai/gpt-4o",
+          "raw": {
+            "images": [
+              "car@90",
+              "plant@90",
+              "texture@270",
+              "flamingo@270"
+            ],
+            "n_images": 4,
+            "objects": [
+              "rubber duck"
+            ],
+            "n_objects": 1,
+            "enemies": 0,
+            "doors": []
+          },
+          "db": {
+            "images": [
+              {
+                "desc": "yellow car",
+                "category": "car",
+                "wall_dir": 90,
+                "confidence": 0.9
+              },
+              {
+                "desc": "green plant",
+                "category": "plant",
+                "wall_dir": 90,
+                "confidence": 0.9
+              },
+              {
+                "desc": "blue texture",
+                "category": "texture",
+                "wall_dir": 270,
+                "confidence": 0.9
+              },
+              {
+                "desc": "flamingo",
+                "category": "flamingo",
+                "wall_dir": 270,
+                "confidence": 0.9
+              }
+            ],
+            "objects": [
+              {
+                "name": "rubber duck",
+                "color": "yellow",
+                "confidence": 0.95
+              }
+            ],
+            "enemies": [],
+            "doors": {
+              "0": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "90": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "180": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "270": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              }
+            }
+          }
+        },
+        "mini_mask": {
+          "ok": true,
+          "error": null,
+          "latency_s": 3.54,
+          "cost_usd": 0.008,
+          "model": "openai/gpt-4o-mini",
+          "raw": {
+            "images": [
+              "taxi@90",
+              "plant@90",
+              "abstract@270",
+              "flamingo@270"
+            ],
+            "n_images": 4,
+            "objects": [
+              "rubber duck"
+            ],
+            "n_objects": 1,
+            "enemies": 0,
+            "doors": [
+              "0",
+              "90",
+              "180",
+              "270"
+            ]
+          },
+          "db": {
+            "images": [
+              {
+                "desc": "yellow taxi",
+                "category": "taxi",
+                "wall_dir": 90,
+                "confidence": 0.85
+              },
+              {
+                "desc": "green plant",
+                "category": "plant",
+                "wall_dir": 90,
+                "confidence": 0.85
+              },
+              {
+                "desc": "blue abstract",
+                "category": "abstract",
+                "wall_dir": 270,
+                "confidence": 0.85
+              },
+              {
+                "desc": "pink flamingo",
+                "category": "flamingo",
+                "wall_dir": 270,
+                "confidence": 0.85
+              }
+            ],
+            "objects": [
+              {
+                "name": "rubber duck",
+                "color": "yellow",
+                "confidence": 0.9
+              }
+            ],
+            "enemies": [],
+            "doors": {
+              "0": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "slate"
+              },
+              "90": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "slate"
+              },
+              "180": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "slate"
+              },
+              "270": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "slate"
+              }
+            }
+          }
+        },
+        "flash_mask": {
+          "ok": true,
+          "error": null,
+          "latency_s": 3.86,
+          "cost_usd": 0.0021,
+          "model": "google/gemini-2.5-flash",
+          "raw": {
+            "images": [
+              "plant@0",
+              "abstract art@0",
+              "car@90",
+              "leaves@90",
+              "rock formation@270",
+              "flamingo@270"
+            ],
+            "n_images": 6,
+            "objects": [
+              "rubber duck"
+            ],
+            "n_objects": 1,
+            "enemies": 0,
+            "doors": [
+              "0",
+              "90",
+              "180",
+              "270"
+            ]
+          },
+          "db": {
+            "images": [
+              {
+                "desc": "green plant",
+                "category": "plant",
+                "wall_dir": 0,
+                "confidence": 0.9
+              },
+              {
+                "desc": "blue abstract art",
+                "category": "abstract art",
+                "wall_dir": 0,
+                "confidence": 0.9
+              },
+              {
+                "desc": "yellow car",
+                "category": "car",
+                "wall_dir": 90,
+                "confidence": 0.9
+              },
+              {
+                "desc": "blue rock formation",
+                "category": "rock formation",
+                "wall_dir": 270,
+                "confidence": 0.9
+              },
+              {
+                "desc": "pink flamingo",
+                "category": "flamingo",
+                "wall_dir": 270,
+                "confidence": 0.9
+              }
+            ],
+            "objects": [
+              {
+                "name": "rubber duck",
+                "color": "yellow",
+                "confidence": 0.9
+              }
+            ],
+            "enemies": [],
+            "doors": {
+              "0": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "90": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "180": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "270": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              }
+            }
+          }
+        }
+      }
+    },
+    "Citrine  Library": {
+      "why": "a reçu flamingo+car de Vermilion dans db.json v2",
+      "color": "lavender",
+      "picks": [
+        {
+          "step": 1577,
+          "heading": 0
+        },
+        {
+          "step": 1537,
+          "heading": 90
+        },
+        {
+          "step": 1523,
+          "heading": 180
+        },
+        {
+          "step": 1434,
+          "heading": 270
+        },
+        {
+          "step": 1576,
+          "heading": 15
+        },
+        {
+          "step": 1578,
+          "heading": 0
+        }
+      ],
+      "runs": {
+        "4o_nomask": {
+          "ok": true,
+          "error": null,
+          "latency_s": 7.59,
+          "cost_usd": 0.0094,
+          "model": "openai/gpt-4o",
+          "raw": {
+            "images": [
+              "flamingo@180",
+              "bison@270"
+            ],
+            "n_images": 2,
+            "objects": [
+              "tree",
+              "traffic cone"
+            ],
+            "n_objects": 2,
+            "enemies": 1,
+            "doors": [
+              "0"
+            ]
+          },
+          "db": {
+            "images": [
+              {
+                "desc": "flamingo",
+                "category": "flamingo",
+                "wall_dir": 180,
+                "confidence": 0.9
+              },
+              {
+                "desc": "bison",
+                "category": "bison",
+                "wall_dir": 270,
+                "confidence": 0.9
+              }
+            ],
+            "objects": [
+              {
+                "name": "tree",
+                "color": "green",
+                "confidence": 0.9
+              },
+              {
+                "name": "traffic cone",
+                "color": "orange",
+                "confidence": 0.9
+              }
+            ],
+            "enemies": [
+              {
+                "shirt_color": "yellow",
+                "pants_color": "blue",
+                "skin_color": "yellow",
+                "body_shape": "tall",
+                "desc": "yellow tall humanoid",
+                "seen_alive": true,
+                "killed": false,
+                "confidence": 0.9
+              }
+            ],
+            "doors": {
+              "0": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "denim"
+              },
+              "90": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "180": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "270": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              }
+            }
+          }
+        },
+        "4o_mask": {
+          "ok": true,
+          "error": null,
+          "latency_s": 2.38,
+          "cost_usd": 0.0095,
+          "model": "openai/gpt-4o",
+          "raw": {
+            "images": [
+              "flamingo@180"
+            ],
+            "n_images": 1,
+            "objects": [
+              "tree",
+              "traffic cone"
+            ],
+            "n_objects": 2,
+            "enemies": 0,
+            "doors": [
+              "180"
+            ]
+          },
+          "db": {
+            "images": [
+              {
+                "desc": "flamingo",
+                "category": "flamingo",
+                "wall_dir": 180,
+                "confidence": 0.9
+              }
+            ],
+            "objects": [
+              {
+                "name": "tree",
+                "color": "green",
+                "confidence": 0.9
+              },
+              {
+                "name": "traffic cone",
+                "color": "orange",
+                "confidence": 0.9
+              }
+            ],
+            "enemies": [],
+            "doors": {
+              "0": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "90": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "180": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": "denim"
+              },
+              "270": {
+                "status": "unknown",
+                "leads_to": null,
+                "neighbor_color": null
+              }
+            }
+          }
+        },
+        "mini_mask": {
+          "ok": true,
+          "error": null,
+          "latency_s": 4.03,
+          "cost_usd": 0.008,
+          "model": "openai/gpt-4o-mini",
+          "raw": {
+            "images": [
+              "flamingo@180"
+            ],
+            "n_images": 1,
+            "objects": [
+              "tree",
+              "traffic cone"
+            ],
+            "n_objects": 2,
+            "enemies": 0,
+            "doors": [
+              "0",
+              "90",
+              "180",
+              "270"
+            ]
+          },
+          "db": {
+            "images": [
+              {
+                "desc": "flamingo",
+                "category": "flamingo",
+                "wall_dir": 180,
+                "confidence": 0.9
+              }
+            ],
+            "objects": [
+              {
+                "name": "tree",
+                "color": "green",
+                "confidence": 0.9
+              },
+              {
+                "name": "traffic cone",
+                "color": "orange",
+                "confidence": 0.9
+              }
+            ],
+            "enemies": [],
+            "doors": {
+              "0": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "90": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "180": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "270": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              }
+            }
+          }
+        },
+        "flash_mask": {
+          "ok": true,
+          "error": null,
+          "latency_s": 2.76,
+          "cost_usd": 0.0017,
+          "model": "google/gemini-2.5-flash",
+          "raw": {
+            "images": [
+              "bird@180"
+            ],
+            "n_images": 1,
+            "objects": [
+              "tree",
+              "traffic cone"
+            ],
+            "n_objects": 2,
+            "enemies": 0,
+            "doors": [
+              "0",
+              "90",
+              "270"
+            ]
+          },
+          "db": {
+            "images": [
+              {
+                "desc": "a hand holding a white bird",
+                "category": "bird",
+                "wall_dir": 180,
+                "confidence": 0.9
+              }
+            ],
+            "objects": [
+              {
+                "name": "tree",
+                "color": "green",
+                "confidence": 0.9
+              },
+              {
+                "name": "traffic cone",
+                "color": "orange",
+                "confidence": 0.9
+              }
+            ],
+            "enemies": [],
+            "doors": {
+              "0": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "90": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "180": {
+                "status": "wall",
+                "leads_to": null,
+                "neighbor_color": null
+              },
+              "270": {
+                "status": "open",
+                "leads_to": null,
+                "neighbor_color": null
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "conditions": [
+    {
+      "id": "4o_nomask",
+      "model": "openai/gpt-4o",
+      "mask": false
+    },
+    {
+      "id": "4o_mask",
+      "model": "openai/gpt-4o",
+      "mask": true
+    },
+    {
+      "id": "mini_mask",
+      "model": "openai/gpt-4o-mini",
+      "mask": true
+    },
+    {
+      "id": "flash_mask",
+      "model": "google/gemini-2.5-flash",
+      "mask": true
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "model": "anthropic/claude-3-haiku",
+    "ok": false,
+    "error": "Expecting value: line 1 column 1 (char 0)",
+    "latency_s": 3.34,
+    "cost_usd": 0.0,
+    "images": [],
+    "objects": [],
+    "enemies": 0
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "ok": false,
+    "error": "Expecting value: line 1 column 1 (char 0)",
+    "latency_s": 9.77,
+    "cost_usd": 0.0,
+    "images": [],
+    "objects": [],
+    "enemies": 0
+  },
+  {
+    "model": "anthropic/claude-sonnet-5",
+    "ok": false,
+    "error": "Extra data: line 18 column 1 (char 538)",
+    "latency_s": 28.18,
+    "cost_usd": 0.0,
+    "images": [],
+    "objects": [],
+    "enemies": 0
+  }
+]

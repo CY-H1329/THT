@@ -1,0 +1,263 @@
+{
+  "room": "Glacial Annex",
+  "cv_wall_color": "mustard",
+  "n_room_frames": 305,
+  "results": [
+    {
+      "strategy": "sequential_1",
+      "ok": true,
+      "cost_usd": 0.005562000000000001,
+      "latency_s": 11.938059209031053,
+      "n_calls": 4,
+      "calls": [
+        {
+          "label": "one@0",
+          "ok": true,
+          "error": null,
+          "cost": 0.0009628000000000001,
+          "latency": 2.3984562500118045,
+          "n_frames": 1
+        },
+        {
+          "label": "one@90",
+          "ok": true,
+          "error": null,
+          "cost": 0.0012731,
+          "latency": 2.6995785840117605,
+          "n_frames": 1
+        },
+        {
+          "label": "one@180",
+          "ok": true,
+          "error": null,
+          "cost": 0.0014408000000000001,
+          "latency": 3.0923290840000845,
+          "n_frames": 1
+        },
+        {
+          "label": "one@270",
+          "ok": true,
+          "error": null,
+          "cost": 0.0018853,
+          "latency": 3.7476952910074033,
+          "n_frames": 1
+        }
+      ],
+      "n_input_frames": 4,
+      "headings": [
+        0,
+        90,
+        180,
+        270
+      ],
+      "db": {
+        "wall_color": "mustard",
+        "images": [
+          {
+            "desc": "two sheep, one large and one small, in a field",
+            "category": "sheep",
+            "wall_dir": 180,
+            "confidence": 0.9
+          },
+          {
+            "desc": "abstract blue and green feathers",
+            "category": "feathers",
+            "wall_dir": 270,
+            "confidence": 0.9
+          },
+          {
+            "desc": "a person with purple hair",
+            "category": "person",
+            "wall_dir": 270,
+            "confidence": 0.9
+          }
+        ],
+        "objects": [
+          {
+            "name": "barrel",
+            "color": "blue",
+            "confidence": 0.9
+          },
+          {
+            "name": "rubber duck",
+            "color": "yellow",
+            "confidence": 0.9
+          }
+        ],
+        "doors": {
+          "0": {
+            "status": "wall",
+            "neighbor_color": null
+          },
+          "90": {
+            "status": "wall",
+            "neighbor_color": null
+          },
+          "180": {
+            "status": "wall",
+            "neighbor_color": null
+          },
+          "270": {
+            "status": "wall",
+            "neighbor_color": null
+          }
+        },
+        "enemies": [
+          {
+            "shirt_color": "blue",
+            "pants_color": "grey",
+            "skin_color": "yellow",
+            "body_shape": "short",
+            "desc": "blue shirt, grey pants, yellow head",
+            "seen_alive": true,
+            "killed": false,
+            "confidence": 0.9
+          }
+        ],
+        "has_locked_door": false,
+        "image_count": 3,
+        "object_count": 2
+      }
+    },
+    {
+      "strategy": "batch_cardinal",
+      "ok": true,
+      "cost_usd": 0.0015078000000000001,
+      "latency_s": 2.517923334002262,
+      "n_calls": 1,
+      "calls": [
+        {
+          "label": "batch4",
+          "ok": true,
+          "error": null,
+          "cost": 0.0015078000000000001,
+          "latency": 2.517923334002262,
+          "n_frames": 4
+        }
+      ],
+      "n_input_frames": 4,
+      "headings": [
+        0,
+        90,
+        180,
+        270
+      ],
+      "db": {
+        "wall_color": "mustard",
+        "images": [
+          {
+            "desc": "two sheep",
+            "category": "sheep",
+            "wall_dir": 180,
+            "confidence": 0.9
+          }
+        ],
+        "objects": [
+          {
+            "name": "barrel",
+            "color": "blue",
+            "confidence": 0.9
+          },
+          {
+            "name": "rubber duck",
+            "color": "yellow",
+            "confidence": 0.9
+          }
+        ],
+        "doors": {
+          "0": {
+            "status": "wall",
+            "neighbor_color": null
+          },
+          "90": {
+            "status": "wall",
+            "neighbor_color": null
+          },
+          "180": {
+            "status": "wall",
+            "neighbor_color": null
+          },
+          "270": {
+            "status": "open",
+            "neighbor_color": "slate"
+          }
+        },
+        "enemies": [],
+        "has_locked_door": false,
+        "image_count": 1,
+        "object_count": 2
+      }
+    },
+    {
+      "strategy": "batch_cardinal_plus_extra",
+      "ok": true,
+      "cost_usd": 0.0016680000000000002,
+      "latency_s": 3.5446344160009176,
+      "n_calls": 1,
+      "calls": [
+        {
+          "label": "batch4+2",
+          "ok": true,
+          "error": null,
+          "cost": 0.0016680000000000002,
+          "latency": 3.5446344160009176,
+          "n_frames": 6
+        }
+      ],
+      "n_input_frames": 6,
+      "headings": [
+        0,
+        90,
+        180,
+        270,
+        105,
+        165
+      ],
+      "db": {
+        "wall_color": "mustard",
+        "images": [
+          {
+            "desc": "two sheep",
+            "category": "sheep",
+            "wall_dir": 180,
+            "confidence": 0.9
+          }
+        ],
+        "objects": [
+          {
+            "name": "barrel",
+            "color": "blue",
+            "confidence": 0.9
+          },
+          {
+            "name": "rubber duck",
+            "color": "yellow",
+            "confidence": 0.9
+          }
+        ],
+        "doors": {
+          "0": {
+            "status": "wall",
+            "neighbor_color": null
+          },
+          "90": {
+            "status": "wall",
+            "neighbor_color": null
+          },
+          "180": {
+            "status": "wall",
+            "neighbor_color": null
+          },
+          "270": {
+            "status": "open",
+            "neighbor_color": "slate"
+          }
+        },
+        "enemies": [],
+        "has_locked_door": false,
+        "image_count": 1,
+        "object_count": 2
+      }
+    }
+  ]
+}

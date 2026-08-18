@@ -1,0 +1,128 @@
+{
+  "color": "slate",
+  "headings": [
+    0,
+    90,
+    180,
+    270,
+    0,
+    0
+  ],
+  "runs": [
+    {
+      "model": "qwen/qwen3.5-flash-02-23",
+      "ok": true,
+      "error": null,
+      "latency_s": 236.23,
+      "cost_usd": 0.1172,
+      "images": [
+        "taxi@90",
+        "plants@90",
+        "abstract_art@270",
+        "hand@270"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 4,
+      "n_objects": 1
+    },
+    {
+      "model": "qwen/qwen3.5-plus-20260420",
+      "ok": true,
+      "error": null,
+      "latency_s": 56.69,
+      "cost_usd": 0.0452,
+      "images": [
+        "car@90",
+        "plant@90",
+        "abstract@270",
+        "abstract@180",
+        "abstract@0",
+        "abstract@0"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 6,
+      "n_objects": 1
+    },
+    {
+      "model": "qwen/qwen3-vl-8b-instruct",
+      "ok": true,
+      "error": null,
+      "latency_s": 3.43,
+      "cost_usd": 0.0104,
+      "images": [
+        "car@90",
+        "plant@90",
+        "tree@270",
+        "fish@270"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 4,
+      "n_objects": 1
+    },
+    {
+      "model": "qwen/qwen3-vl-32b-instruct",
+      "ok": true,
+      "error": null,
+      "latency_s": 8.51,
+      "cost_usd": 0.011,
+      "images": [
+        "taxi@90",
+        "plant@90",
+        "abstract_art@270",
+        "fish@270",
+        "traffic_cone@0"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 5,
+      "n_objects": 1
+    },
+    {
+      "model": "qwen/qwen3.7-flash",
+      "ok": true,
+      "error": null,
+      "latency_s": 15.52,
+      "cost_usd": 0.0156,
+      "images": [
+        "car@90",
+        "foliage@90",
+        "abstract@270",
+        "hand@270"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 4,
+      "n_objects": 1
+    },
+    {
+      "model": "meta-llama/llama-4-scout",
+      "ok": true,
+      "error": null,
+      "latency_s": 11.04,
+      "cost_usd": 0.0078,
+      "images": [
+        "car@90",
+        "guitar@270"
+      ],
+      "objects": [
+        "rubber duck"
+      ],
+      "enemies": 0,
+      "n_images": 2,
+      "n_objects": 1
+    }
+  ]
+}
