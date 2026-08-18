@@ -127,9 +127,14 @@ _RECOVER_MAX_ATTEMPTS = 8  # 이만큼 회전해도 계속 막히면 "이 방향
 # 헤딩에서 180도-포기(구석 몰림)를 통째로 몇 번 겪었는지"는 별도로 세서
 # 무한히 방을 맴도는 걸 막는다(실측으로 발견, dev_log.md).
 _MAX_CORNERED_PER_TARGET = 3
-_RECENTER_STEPS = 8        # 힌트 배너 중(깊이 측정 불가) 폴백용 소량 고정 전진
-_RECENTER_MAX_STEPS = 40   # clearance 기반 중앙 이동의 안전 상한(=최대 6m)
-_RECENTER_BACKOFF = 3      # 막힌 뒤 벽에서 떨어지려고 후진하는 스텝 수
+# RECENTER: 이 이상 재면 벽이 아니라 문/개방부로 보고(그 방향 거리는
+# 못 믿음) 반대쪽 벽만으로 중앙을 추정한다. 실측(ground truth로 확인,
+# dev_log.md): 방이 10x10이라 입구 바로 앞에서 정면 벽까지가 이미 9.9m
+# 가까이 나온다 — 처음엔 6.0m로 잡았다가 이 진짜 벽 거리까지 "문"으로
+# 오판해서 전혀 안 움직이는 버그가 났다. geo.MAX_RANGE(20.0, 완전히
+# 뚫린 문이 나오는 값)보다는 확실히 낮고, 이 env의 실제 방 크기보다는
+# 넉넉히 큰 값으로 올림.
+_RECENTER_MEASURE_CAP_M = 15.0
 
 # HINT_CAPTURE: door_touch_radius=1.5m(difficulty.yaml 실측 확인). 자물쇠가
 # 보일 만큼 가까이 있는 "구석에 몰린" 상태는 대개 이미 그 안쪽이거나
@@ -258,9 +263,11 @@ class ExplorerPolicy:
         self.key_sweep_steps_done = 0
 
         self.recenter_room = None
-        self.recenter_steps = 0
-        self.recenter_backoff = 0
-        self.recenter_target_clearance = None
+        self.recenter_entry_heading = None
+        self.recenter_phase = None       # "measure" | "move"
+        self.recenter_measure_idx = 0
+        self.recenter_clearances: dict = {}
+        self.recenter_move_plan: list = []
 
         self.survey_queue: list = []
         self.survey_samples: dict = {}
@@ -472,41 +479,73 @@ class ExplorerPolicy:
                 node.exit_leads_to[backward] = parent
             self.scene.add_edge(name, parent)
         self.scene.stack.append((name, entry_heading))
-        return self._start_recenter(name)
+        return self._start_recenter(name, entry_heading)
 
-    # --- RECENTER: 문 앞을 벗어나 방 중앙 쪽으로 -------------------------------
-    def _start_recenter(self, canon):
+    # --- RECENTER: 방 4벽까지의 거리를 실측해 기하학적으로 정확한 중앙까지 이동 ---
+    # 사용자 지시: "공간 자체가 geometry니까 그걸 계산해서 중간에 도착해야
+    # 한다". 예전엔 "입구 클리어런스의 절반쯤"이라는 어림값으로 앞으로
+    # 걷고, 그 다음에 따로 좌우를 재서 보정하는 2단계 방식이었는데, 이건
+    # 진짜 중앙을 보장하지 않는다(추정치 위에 추정치를 쌓는 식). 대신
+    # 여기서는: 절대 방위 0/90/180/270 네 방향 모두 벽까지의 거리를 먼저
+    # 다 재고(방은 축에 정렬된 상자형이라 이 네 방향이 곧 방의 두 축과
+    # 일치함, world/layout.py 격자 구조로 보장), 두 축(0-180축, 90-270축)
+    # 각각에서 "두 벽 사이의 정확한 중점"까지 걸을 거리를 계산해서 실행한다.
+    def _start_recenter(self, canon, entry_heading=None):
         self.recenter_room = canon
-        self.recenter_steps = 0
-        self.recenter_backoff = 0
-        self.recenter_target_clearance = None  # 첫 틱에 측정해서 채움
+        self.recenter_entry_heading = entry_heading
+        self.recenter_phase = "measure"
+        self.recenter_measure_idx = 0
+        self.recenter_clearances = {}
+        self.recenter_move_plan = []
         self._last_action_was_forward = False
         self.state = "RECENTER"
         return self._Action.NO_OP
 
-    def _step_recenter(self, hud, obs):
-        if self.recenter_backoff > 0:
-            self.recenter_backoff -= 1
-            if self.recenter_backoff == 0:
-                return self._start_survey_scan()
-            return self._Action.MOVE_BACK
+    def _plan_recenter_moves(self):
+        c = self.recenter_clearances
+        entry = self.recenter_entry_heading
+        plan = []
+        for pos, neg in ((0, 180), (90, 270)):
+            d_pos = c.get(pos, _RECENTER_MEASURE_CAP_M)
+            d_neg = c.get(neg, _RECENTER_MEASURE_CAP_M)
+            if entry is not None and entry in (pos, neg):
+                # 방금 들어온 문이 있는 축 — 문 쪽(뒤)은 재도 못 믿는다
+                # (아직 열려 있는 문틈으로 "옆방까지" 거리가 잡혀서 방금
+                # 지나온 문을 진짜 벽으로 오인하는 버그를 ground truth로
+                # 실측 확인함, dev_log.md). 대신 "몇 걸음 안 걸어서 아직
+                # 그 문 벽 바로 앞이다"라는 사실 자체를 근거로 쓴다 —
+                # 정면(entry 방향) 클리어런스의 절반만큼 더 걸으면 된다.
+                d_fwd = c.get(entry, _RECENTER_MEASURE_CAP_M)
+                dist = min(d_fwd, _RECENTER_MEASURE_CAP_M) / 2.0
+                heading = entry
+            else:
+                pos_open = d_pos >= _RECENTER_MEASURE_CAP_M
+                neg_open = d_neg >= _RECENTER_MEASURE_CAP_M
+                if pos_open or neg_open:
+                    # 이 축의 한쪽(또는 양쪽)이 문/개방부라 반대쪽 벽
+                    # 하나만으로는 이 방의 진짜 폭을 알 수 없다 — 방이
+                    # 대칭이라고 가정할 근거가 약하므로, 억지로 추정하지
+                    # 않고 이 축은 그냥 안 움직인다(안전한 쪽).
+                    continue
+                # 양쪽 다 실측 벽 — 정확한 중점까지 남은 거리를 바로 계산.
+                diff = (d_pos - d_neg) / 2.0
+                if abs(diff) < 0.1:
+                    continue
+                dist, heading = (diff, pos) if diff > 0 else (-diff, neg)
+            n_steps = max(1, int(round(dist / geo.FORWARD_STEP)))
+            n_steps = min(n_steps, int(_RECENTER_MEASURE_CAP_M / geo.FORWARD_STEP))
+            plan.append([heading, n_steps])
+        self.recenter_move_plan = plan
 
-        # 들어온 방향이 우연히 "문" 방향이면(실측 확인: 스폰 헤딩이 그런
-        # 경우가 흔함) "막힐 때까지 전진"은 벽을 안 만나고 다음 방까지
-        # 계속 뚫고 들어가버린다(예전 버그, dev_log.md). 그래서 고정 스텝
-        # 대신 agent.geometry로 입구에서 측정한 정면 클리어런스의 절반쯤
-        # (=대충 방 중앙 방향)까지만 걷는다 — 방 크기에 맞게 적응하면서도
-        # 반대쪽 문까지 뚫고 들어가진 않는다(사용자 피드백: 입구에서 너무
-        # 조금만 걷고 멈춰서 어색해 보임).
+    def _step_recenter(self, hud, obs):
+        A = self._Action
+        # 측정/이동 중 실수로 문을 넘어가면(문 방향을 재는 중일 수도,
+        # 이동 중일 수도) 그 자체가 "이 방향에 문이 있다"는 확실한
+        # 증거다 — 이전 방 노드에도 기록해둔다(실측 확인된 문제,
+        # dev_log.md — 안 그러면 그 방이 서베이를 한 번도 못 받고
+        # 나머지 방향이 영원히 unknown으로 남았다).
         canon = self._canonicalize(hud.room_name) if hud.room_name else None
         if canon is not None and canon != self.recenter_room:
-            # 실수로 문을 넘어간 것 자체가 "이 방향에 문이 있다"는 확실한
-            # 증거다 — 근데 예전엔 새 방 쪽 기록만 하고 이전 방(스폰 방일
-            # 때가 많음) 노드에는 이 방향을 기록 안 해서, 그 방이 서베이를
-            # 아예 한 번도 못 받고 나머지 3방향이 영원히 unknown으로 남는
-            # 버그가 있었다(실측 확인, dev_log.md — 8~12개 방 중 3개만
-            # 발견하고 끝난 사례). 방을 나가기 전에 이 방향을 이전 방
-            # 노드에도 남긴다.
             old_node = self.scene.nodes.get(self.recenter_room)
             if old_node is not None and hud.ok and hud.heading is not None:
                 cardinal = min(CARDINAL_HEADINGS,
@@ -517,39 +556,49 @@ class ExplorerPolicy:
             return self._enter_room(hud, entry_heading=hud.heading, parent=self.recenter_room)
 
         if hint_banner_active(obs):
-            # 배너 중엔 깊이 측정이 무의미 — 예전 방식(소량 고정 전진)으로 대체.
-            if self._last_action_was_forward and self.prev_frame is not None:
-                if is_blocked(self.prev_frame, obs):
-                    self.recenter_backoff = _RECENTER_BACKOFF
-                    self._last_action_was_forward = False
-                    return self._Action.MOVE_BACK
-            self.recenter_steps += 1
-            if self.recenter_steps > _RECENTER_STEPS:
-                return self._start_survey_scan()
-            self._last_action_was_forward = True
-            return self._Action.MOVE_FORWARD
+            # 배너 중엔 깊이 측정이 무의미 — 드문 경우라 그냥 잠깐 대기.
+            return A.NO_OP
 
-        clearance = geo.cone_clearance(geo.depth_profile(obs), 0.0, _SEEK_CONE_HALF_DEG)
-        if self.recenter_target_clearance is None:
-            # 첫 틱: 입구에서 보이는 클리어런스의 절반을 목표로 삼는다.
-            # 문 방향이라 아주 멀리(열린 걸로) 보일 수 있어 상한을 둔다.
-            self.recenter_target_clearance = max(
-                _SEEK_SAFE_CLEARANCE, min(clearance / 2.0, 4.0))
+        if self.recenter_phase == "measure":
+            headings = (0, 90, 180, 270)
+            target = headings[self.recenter_measure_idx]
+            diff = _heading_diff(hud.heading, target)
+            if abs(diff) > _TURN_TOLERANCE:
+                return A.TURN_LEFT if diff > 0 else A.TURN_RIGHT
+            clearance = geo.cone_clearance(geo.depth_profile(obs), 0.0, _SEEK_CONE_HALF_DEG)
+            self.recenter_clearances[target] = min(clearance, _RECENTER_MEASURE_CAP_M)
+            self.recenter_measure_idx += 1
+            if self.recenter_measure_idx >= 4:
+                self._plan_recenter_moves()
+                self.recenter_phase = "move"
+            return A.NO_OP
 
-        if clearance <= self.recenter_target_clearance:
+        # phase == "move": 계산해둔 두 축(최대 2개) 이동을 순서대로 실행.
+        if not self.recenter_move_plan:
             return self._start_survey_scan()
-
+        target_heading, steps_remaining = self.recenter_move_plan[0]
+        diff = _heading_diff(hud.heading, target_heading)
+        if abs(diff) > _TURN_TOLERANCE:
+            return A.TURN_LEFT if diff > 0 else A.TURN_RIGHT
+        if steps_remaining <= 0:
+            self.recenter_move_plan.pop(0)
+            self._last_action_was_forward = False
+            return A.NO_OP
         if self._last_action_was_forward and self.prev_frame is not None:
             if is_blocked(self.prev_frame, obs):
-                self.recenter_backoff = _RECENTER_BACKOFF
+                # 계산한 거리보다 먼저 막힘(가구 등) — 이 축은 여기서
+                # 포기하고 다음 축(또는 서베이)으로 넘어간다.
+                self.recenter_move_plan.pop(0)
                 self._last_action_was_forward = False
-                return self._Action.MOVE_BACK
-
-        self.recenter_steps += 1
-        if self.recenter_steps > _RECENTER_MAX_STEPS:  # 안전 상한
-            return self._start_survey_scan()
+                return A.NO_OP
+        clearance = geo.cone_clearance(geo.depth_profile(obs), 0.0, _SEEK_CONE_HALF_DEG)
+        if clearance < _SEEK_SAFE_CLEARANCE:
+            self.recenter_move_plan.pop(0)
+            self._last_action_was_forward = False
+            return A.NO_OP
+        self.recenter_move_plan[0][1] = steps_remaining - 1
         self._last_action_was_forward = True
-        return self._Action.MOVE_FORWARD
+        return A.MOVE_FORWARD
 
     def _start_survey_scan(self):
         node = self.scene.nodes[self.recenter_room]
@@ -771,8 +820,19 @@ class ExplorerPolicy:
             self._nav_probed_center = True
             return self._Action.MOVE_FORWARD
 
-        # 정면이 막힘 — 옆으로 비켜갈 수 있는지 가까운 오프셋부터 확인.
-        for off in _SIDESTEP_OFFSETS_DEG[1:]:
+        # 정면이 막힘 — 옆으로 비켜갈 수 있는지 확인. 매 틱 오프셋을
+        # 처음부터 다시 스캔하면, 이미 한쪽으로 틀어놓은 상태에서 다음
+        # 틱에 반대쪽이 근소하게 더 넓게 측정되면 곧바로 반대로 확 틀어
+        # 버려서 좌우로 계속 뒤집는 게 빙글빙글 도는 것처럼 보였다(사용자
+        # 피드백: "정지하고 생각하고 움직이라는거야"). 이미 기운 bias가
+        # 있으면 같은 쪽을 먼저 본다 — 반대쪽은 같은 쪽이 전부 막혔을
+        # 때만 시도한다.
+        offsets = _SIDESTEP_OFFSETS_DEG[1:]
+        if self._nav_bias_deg > 0:
+            offsets = sorted(offsets, key=lambda o: (o <= 0, abs(o)))
+        elif self._nav_bias_deg < 0:
+            offsets = sorted(offsets, key=lambda o: (o >= 0, abs(o)))
+        for off in offsets:
             clearance = geo.cone_clearance(profile, off, _SIDESTEP_CONE_HALF_DEG)
             if clearance >= _SEEK_SAFE_CLEARANCE:
                 self._nav_bias_deg = geo.wrap180(self._nav_bias_deg + off)
@@ -966,9 +1026,11 @@ class ExplorerPolicy:
             if node.wall_color is None:
                 # RECENTER 중 실수로 문을 넘어가서 이 방이 서베이(벽색
                 # 기록)를 한 번도 못 받은 경우 — 되돌아온 김에 지금 마저
-                # 받는다(실측 확인된 문제, dev_log.md 참고).
-                self.recenter_room = canon
-                return self._start_survey_scan()
+                # 받는다(실측 확인된 문제, dev_log.md 참고). 지금 서있는
+                # 위치가 방 중앙일 리 없으므로(RETURN으로 막 도착한
+                # 지점) 곧장 서베이로 가지 않고 RECENTER부터 다시 거친다
+                # (360도 서베이는 반드시 방 중앙에서만 — 사용자 지시).
+                return self._start_recenter(canon)
             return self._start_seek(canon, node)
 
         # 실측으로 발견한 버그(dev_log.md): RETURN이 장애물을 피하다
@@ -1051,7 +1113,14 @@ class ExplorerPolicy:
             # 즉각적으로 안 죽인다"는 원인. close_range_bearing은 사람형
             # 판정 없이 "벽도 바닥도 아닌 큰 덩어리"만 보므로 이 거리에서도
             # 먹힌다(이미 HP가 깎여 진입한 상태라 오탐 위험도 낮음).
-            bearing = EN.close_range_bearing(obs, wall_rgb=self._current_wall_rgb(hud))
+            # 아직 한 번도 못 맞춘 시점(flee_ever_attacked=False)엔 "죽여서
+            # 사라진 자리를 계속 공격" 오탐이 원천적으로 불가능하므로
+            # 발밑 조건(require_bottom_band)을 꺼서 문틈 사이로 비스듬히
+            # 보이는 적도 더 적극적으로 잡는다(실측으로 확인된 두 번째
+            # 교전 놓침 사례, dev_log.md).
+            bearing = EN.close_range_bearing(
+                obs, wall_rgb=self._current_wall_rgb(hud),
+                require_bottom_band=self.flee_ever_attacked)
             if bearing is not None and self.flee_fastpath_attack_streak < _CLOSE_RANGE_ATTACK_STREAK_MAX:
                 if abs(bearing) <= _ATTACK_CONE_HALF_DEG:
                     self.flee_ever_attacked = True

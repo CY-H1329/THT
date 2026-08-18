@@ -245,14 +245,21 @@ _CLOSE_RANGE_BOTTOM_BAND = 0.20      # 프레임 하단 몇 %를 "발밑" 구간
 
 
 def close_range_bearing(frame: np.ndarray, wall_rgb: Optional[Tuple[int, int, int]] = None,
-                         min_frac: float = _CLOSE_RANGE_MIN_FRAC) -> Optional[float]:
+                         min_frac: float = _CLOSE_RANGE_MIN_FRAC,
+                         require_bottom_band: bool = True) -> Optional[float]:
     """근접 전투 전용: 적일 가능성이 높은 큰 덩어리의 방위(도)만 빠르게 추정.
 
     None을 반환하면 호출자가 detect()(중간 거리용)나 sweep으로 넘어가면
     된다. HUD 아래 전체 프레임에서 "바닥(무채색 체커보드)도 아니고
     (wall_rgb가 있으면) 이 방 벽색과도 다른" 픽셀의 열(column) 방향
-    무게중심을 방위로 환산한다. 화면 맨 아래(발밑)까지 이어지지 않는
-    덩어리는 문틈 너머 풍경일 가능성이 높아 제외한다(위 주석 참고).
+    무게중심을 방위로 환산한다.
+
+    require_bottom_band: 화면 맨 아래(발밑)까지 이어지는지 요구할지.
+    죽인 뒤 문틈 너머 풍경을 계속 적으로 오인하는 걸 막으려고 넣은
+    조건인데(위 상단 주석), 실측(dev_log.md)해보니 문틈 사이로 비스듬히
+    보이는 진짜(아직 살아있는) 적도 이 조건에 걸려 못 잡고 sweep으로
+    빠졌다 — 아직 한 번도 못 맞춘 시점(=죽여서 사라졌을 리 없음)엔
+    호출자가 이 조건을 꺼서 더 적극적으로 잡게 한다.
     """
     body = frame[geo.HUD_H:, :, :]
     sat = geo.saturation(body)
@@ -264,9 +271,10 @@ def close_range_bearing(frame: np.ndarray, wall_rgb: Optional[Tuple[int, int, in
         mask = not_floor
     if mask.mean() < min_frac:
         return None
-    bottom_start = int(mask.shape[0] * (1.0 - _CLOSE_RANGE_BOTTOM_BAND))
-    if mask[bottom_start:].mean() < _CLOSE_RANGE_BOTTOM_FRAC_MIN:
-        return None
+    if require_bottom_band:
+        bottom_start = int(mask.shape[0] * (1.0 - _CLOSE_RANGE_BOTTOM_BAND))
+        if mask[bottom_start:].mean() < _CLOSE_RANGE_BOTTOM_FRAC_MIN:
+            return None
     col_weight = mask.sum(axis=0).astype(np.float64)
     total = col_weight.sum()
     if total <= 0:
