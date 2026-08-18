@@ -72,6 +72,8 @@
 
 from __future__ import annotations
 
+import re
+
 from agent import enemies as EN
 from agent import geometry as geo
 from agent.memory import SceneGraph, CARDINAL_HEADINGS
@@ -167,6 +169,13 @@ _VLM_RECOVER_MAX_TICKS = 20  # VLM이 계속 "아직 안 열림"이라 해도 �
 # 낮추면 정상 동작까지 방해하므로, 확실히 비정상인 수준으로 넉넉하게 잡음.
 _STUCK_ROOM_TICKS_THRESHOLD = 150
 
+# 열쇠 찾기: 방 하나를 훑을 때 정면/좌/뒤/우 순으로 몇 걸음씩 걸어보는
+# 십자(+) 패턴. key_pickup_radius(0.8m)가 좁고 열쇠 위치가 방 안 랜덤이라
+# (실측 확인, dev_log.md) 완벽한 커버리지는 아니지만, 중앙 한 점보다는
+# 훨씬 넓게 훑는다.
+_KEY_SWEEP_HEADINGS_OFFSET = (0, 90, 180, 270)  # 진입 시 헤딩 기준 상대 오프셋
+_KEY_SWEEP_STEPS_PER_LEG = 15  # 15 * 0.15m ≈ 2.25m
+
 
 def _heading_diff(a: int, b: int) -> int:
     """b - a를 [-180, 180]로 정규화. TURN_RIGHT는 헤딩을 줄이고 TURN_LEFT는
@@ -176,6 +185,33 @@ def _heading_diff(a: int, b: int) -> int:
     if d > 180:
         d -= 360
     return d
+
+
+# 힌트 텍스트(doors.py::HINT_TEMPLATES)를 지금까지 알아낸 방 정보와
+# 대조해서 후보 방을 추정한다. 플레이 도중(=answer() 전, content_db가
+# 아직 안 채워진 시점)에는 wall_color와 방 이름만 확실히 갖고 있으므로,
+# 그 두 템플릿("the room with {color} walls", "the room called {name}")
+# 만 직접 매칭한다 — 나머지(이미지/오브젝트 개수) 템플릿은 지금 갖고
+# 있는 정보로는 판단 불가능하니 매칭 안 되면 그냥 None(포기)을 반환한다.
+# color 템플릿은 전체 방(8~12개) 기준으로는 고유하다고 doors.py가
+# 보장하지만, 우리가 "지금까지 찾은" 부분집합에서는 여러 방이 같은
+# 색일 수 있어 모호할 수 있다 — 모호하면 그냥 첫 매칭을 최선의 추정으로
+# 쓴다(확신 낮음, report.md에 한계로 기록 예정).
+def _match_hint_to_room(hint_text: str, scene: SceneGraph) -> Optional[str]:
+    if not hint_text:
+        return None
+    text = hint_text.lower()
+    m = re.search(r"room called ([a-z .…]+)", text)
+    if m:
+        candidate = m.group(1).strip().rstrip(".")
+        for name in scene.nodes:
+            norm = name.lower().rstrip("…").strip()
+            if norm and (norm in candidate or candidate in norm):
+                return name
+    for name, node in scene.nodes.items():
+        if node.wall_color and f"{node.wall_color} walls" in text:
+            return name
+    return None
 
 
 class ExplorerPolicy:
@@ -213,6 +249,13 @@ class ExplorerPolicy:
 
         # DFS 스택: 부모 방 도착 확인 전까지는 pop을 미룬다(위 _start_backtrack 주석 참고)
         self._stack_pop_pending = None
+
+        # 열쇠 찾기 + 잠긴 문 열기(DONE 도달 후, 힌트가 있으면 시도)
+        self.key_hunt_attempted = False  # 에피소드당 한 번만 시도
+        self.goto_target_room = None
+        self.goto_purpose = None  # "key_room" | "locked_door"
+        self.key_sweep_idx = 0
+        self.key_sweep_steps_done = 0
 
         self.recenter_room = None
         self.recenter_steps = 0
@@ -393,8 +436,14 @@ class ExplorerPolicy:
             return self._step_return(hud, obs)
         if self.state == "VLM_RECOVER":
             return self._step_vlm_recover(obs)
+        if self.state == "GOTO_ROOM":
+            return self._step_goto_room(hud, obs)
+        if self.state == "KEY_SWEEP":
+            return self._step_key_sweep(hud, obs)
+        if self.state == "KEY_UNLOCK":
+            return self._step_key_unlock(hud, obs)
         if self.state == "DONE":
-            return self._Action.TURN_RIGHT  # 더 갈 새 방 없음 — 제자리 대기
+            return self._step_done(hud, obs)
         return self._enter_room(hud, entry_heading=None, parent=None)
 
     # --- 방 이름 정규화 (말줄임표로 잘린 것 병합, dev_log.md 참고) -----
@@ -1125,6 +1174,135 @@ class ExplorerPolicy:
         self.recover_attempts = 0
         self._stuck_room_ticks = 0  # 룰베이스에 다시 온전한 기회를 준다
         return self._Action.NO_OP
+
+    # --- DONE: 더 갈 새 방 없음. 힌트가 있으면 열쇠 찾기를 한 번 시도 ---
+    def _step_done(self, hud, obs):
+        if (not self.key_hunt_attempted and self.scene.key_hint_text
+                and hud.ok and not hud.has_key):
+            self.key_hunt_attempted = True
+            target = _match_hint_to_room(self.scene.key_hint_text, self.scene)
+            self.scene.key_target_room = target
+            canon = self._canonicalize(hud.room_name) if hud.room_name else None
+            if target is not None and canon is not None and target != canon:
+                return self._start_goto_room(target, "key_room", canon)
+            if target is not None and canon == target:
+                return self._start_key_sweep()
+            # 매칭 실패 — 지금 가진 정보(방 색/이름)로는 못 찾음. 포기.
+        return self._Action.TURN_RIGHT  # 제자리 대기
+
+    # --- GOTO_ROOM: SceneGraph.find_path로 매 틱 다음 홉을 다시 계산하며 이동 ---
+    def _start_goto_room(self, target_room, purpose, from_room):
+        self.goto_target_room = target_room
+        self.goto_purpose = purpose
+        self.recover_attempts = 0
+        self._need_align = True
+        self._last_action_was_forward = False
+        self._nav_bias_deg = 0.0
+        self._nav_fail_count = 0
+        self._nav_action_queue = []
+        self._nav_probed_center = False
+        self._nav_cornered_count = 0
+        path = self.scene.find_path(from_room, target_room)
+        if not path:
+            return self._end_key_hunt()
+        self.target_heading = path[0][1]
+        self.state = "GOTO_ROOM"
+        return self._Action.NO_OP
+
+    def _step_goto_room(self, hud, obs):
+        canon = self._canonicalize(hud.room_name) if hud.room_name else None
+        if canon == self.goto_target_room:
+            if self.goto_purpose == "key_room":
+                return self._start_key_sweep()
+            if self.goto_purpose == "locked_door":
+                return self._start_key_unlock_approach()
+            return self._end_key_hunt()
+
+        if canon is not None and canon in self.scene.nodes:
+            path = self.scene.find_path(canon, self.goto_target_room)
+            if path:
+                self.target_heading = path[0][1]
+            else:
+                return self._end_key_hunt()
+
+        def on_final_give_up():
+            return self._end_key_hunt()
+
+        def on_exhausted():
+            return self._escalate_nav_failure(obs, on_final_give_up)
+
+        return self._navigate_step(hud, obs, self.target_heading, on_exhausted)
+
+    # --- KEY_SWEEP: 열쇠 방에 도착 후, 십자 패턴으로 걸어보며 0.8m 픽업 유도 ---
+    def _start_key_sweep(self):
+        self.key_sweep_idx = 0
+        self.key_sweep_steps_done = 0
+        self._need_align = True
+        self._last_action_was_forward = False
+        self.state = "KEY_SWEEP"
+        return self._Action.NO_OP
+
+    def _step_key_sweep(self, hud, obs):
+        if hud.ok and hud.has_key:
+            locked_room = self.scene.key_hint_room
+            if locked_room is not None and locked_room in self.scene.nodes:
+                canon = self._canonicalize(hud.room_name) if hud.room_name else None
+                return self._start_goto_room(locked_room, "locked_door", canon)
+            return self._end_key_hunt()
+        if self.key_sweep_idx >= len(_KEY_SWEEP_HEADINGS_OFFSET):
+            return self._end_key_hunt()  # 이 방엔 없었다 — 포기
+
+        target = _KEY_SWEEP_HEADINGS_OFFSET[self.key_sweep_idx]
+        diff = _heading_diff(hud.heading, target) if hud.ok else 0
+        if abs(diff) > _TURN_TOLERANCE:
+            return self._Action.TURN_LEFT if diff > 0 else self._Action.TURN_RIGHT
+        if self.key_sweep_steps_done >= _KEY_SWEEP_STEPS_PER_LEG:
+            self.key_sweep_idx += 1
+            self.key_sweep_steps_done = 0
+            return self._Action.NO_OP
+        profile = geo.depth_profile(obs)
+        if geo.cone_clearance(profile, 0.0, _SEEK_CONE_HALF_DEG) >= _SEEK_SAFE_CLEARANCE:
+            self.key_sweep_steps_done += 1
+            self._last_action_was_forward = True
+            return self._Action.MOVE_FORWARD
+        # 이 방향은 막힘 — 그만 걷고 다음 방향으로.
+        self.key_sweep_idx += 1
+        self.key_sweep_steps_done = 0
+        return self._Action.NO_OP
+
+    # --- KEY_UNLOCK: 잠긴 문 방향으로 접근 — 터치 반경(1.5m) 안에서 자동 해제 ---
+    def _start_key_unlock_approach(self):
+        self.target_heading = self.scene.key_hint_heading
+        self.recover_attempts = 0
+        self._need_align = True
+        self._last_action_was_forward = False
+        self._nav_bias_deg = 0.0
+        self._nav_fail_count = 0
+        self._nav_action_queue = []
+        self._nav_probed_center = False
+        self._nav_cornered_count = 0
+        self.state = "KEY_UNLOCK"
+        return self._Action.NO_OP
+
+    def _step_key_unlock(self, hud, obs):
+        canon = self._canonicalize(hud.room_name) if hud.room_name else None
+        if canon is not None and canon != self.scene.key_hint_room:
+            # 문 통과 성공 — 새 방 발견 처리(잠긴 문 쪽 exits는 이미
+            # "locked"로 기록돼 있으니 그대로 두고, 새 방을 정상 등록).
+            return self._enter_room(hud, entry_heading=self.target_heading,
+                                     parent=self.scene.key_hint_room)
+
+        def on_final_give_up():
+            return self._end_key_hunt()
+
+        def on_exhausted():
+            return self._escalate_nav_failure(obs, on_final_give_up)
+
+        return self._navigate_step(hud, obs, self.target_heading, on_exhausted)
+
+    def _end_key_hunt(self):
+        self.state = "DONE"
+        return self._Action.TURN_RIGHT
 
     def _resume_after_flee(self):
         self.flee_phase = None
