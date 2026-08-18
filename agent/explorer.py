@@ -113,13 +113,14 @@ _MOB_MAX_COMBAT_DIST_M = 4.0
 # 진짜 적이면 HP 1~4라 몇 방이면 죽어야 정상인데 콘/사거리 조건을 계속
 # 만족하며 공격이 이만큼 연속되면 오탐으로 보고 sweep으로 넘어간다.
 _FASTPATH_ATTACK_STREAK_MAX = 4
-# close_range_bearing()은 FLEE strike 진입 시점(=이미 맞아서 적이 코앞)
-# 에만 쓰여서 오탐 위험이 훨씬 낮다 — 실측(dev_log.md, seed=7): 적 HP가
-# 1~4인데 위 4번 cap에 걸려 매번 sweep으로 밀려나서, 근접 탐지가 성공해도
-# 총 전투 시간이 거의 안 줄었다(그대로 매번 sweep을 다시 타서 39틱대
-# 유지). 진짜 적이 확실한 상황이라 cap을 넉넉히 늘려 fastpath만으로
-# 끝까지 죽일 기회를 준다(빗맞음 몇 번 있어도 충분하도록 최대 HP의 2배).
-_CLOSE_RANGE_ATTACK_STREAK_MAX = 8
+# close_range_bearing() 쪽 상한. 이건 이미 맞아서 적이 코앞인 게 확정된
+# 상황에서만 쓰여 오탐 위험이 낮으므로 위 4번보다 여유를 준다. 적 HP는
+# 최대 4(difficulty.yaml)라 조준이 맞았다면 4방이면 죽는다 — 연속 5방을
+# 때렸는데 아직 살아있으면 지금 겨누고 있는 건 적이 아니다(문틈/벽 오탐).
+# 더 때리는 대신 다시 훑는 게 빠르다. 예전 값은 8이었는데, 그건 방위
+# 추정이 심하게 편향돼 있던 시절(enemies.close_range_bearing 주석 참고:
+# 중앙값 오차 42도)에 헛스윙을 많이 허용해야 했기 때문이다.
+_CLOSE_RANGE_ATTACK_STREAK_MAX = 5
 
 # 전진 전에 미리 확인하는 정면 클리어런스(agent.geometry 깊이 프로파일).
 # AGENT_RADIUS(0.4m) + 한 스텝(0.15m) + 여유. 이걸로 "가보고 막히면 반응"
@@ -157,6 +158,26 @@ _HINT_CAPTURE_MAX_APPROACH_TICKS = 20
 # 어느 각도에 있든 반드시 한 번은 걸린다. sweep 안전망의 기반 수치.
 _FLEE_SWEEP_HEADINGS = 24              # 360 / 15도
 _FLEE_SWEEP_ATTACKS_PER_HEADING = 2    # 적 HP 1~4 감안, 걸렸을 때 한 방에 안 죽어도 잡도록
+# 눈감고 휘두르는 sweep에 들어가기 전에 먼저 도는 "훑기(scan)" 패스.
+# 실측(base 벤치, seed 0~3): 전투 한 번이 20~59틱인데 그 대부분이 sweep의
+# 헛스윙이었다(공격 39번에 명중 1번 같은 식). sweep은 한 방향에 3틱씩
+# (공격 2 + 회전 1) 쓰므로 적이 뒤에 있으면 정면에 들어오기까지만 36틱이
+# 걸린다. 반면 공격 없이 회전만 하면 같은 각도를 12틱에 훑고, 그 사이
+# 매 틱 CV(close_range_bearing ~1~2ms)로 보므로 시야(±37.5도)에 들어오는
+# 순간 바로 조준 공격으로 넘어간다 — "돌아보고 조준해서 때린다"가
+# "눈감고 한 바퀴 휘두른다"보다 훨씬 빠르다. CV가 끝내 아무것도 못 찾으면
+# 그때 기존 sweep(기하학적으로 100% 걸리는 안전망)으로 넘어간다.
+_FLEE_SCAN_HEADINGS = 24               # 360도 한 바퀴, 틱당 15도
+# 이미 "조준한 상태로" 때린 적이 있는데 그 뒤 CV가 갑자기 아무것도 못 찾으면,
+# 적 HP가 1~4라 대개 죽어서 사라진 것이다(sweep 쪽 _FLEE_SWEEP_QUICK_CHECK_
+# HEADINGS와 같은 논리). 그럴 땐 한 바퀴를 다 훑는 대신 짧게만 확인하고
+# 하던 탐험으로 돌아간다 — 실측(v3 벤치)에서 전투 하나가 38~76틱이었는데
+# 그 상당 부분이 "이미 죽인 적을 마저 찾는" 시간이었다.
+_FLEE_SCAN_QUICK_HEADINGS = 8
+# CV가 준 방위로 계속 돌기만 하고 한 번도 공격 콘에 못 넣는 경우(대개
+# 벽/문틈 같은 오탐 덩어리를 쫓는 중) 몇 틱 만에 끊는다. 진짜 적이면
+# 시야 반각이 37.5도라 3틱이면 정면에 온다.
+_FLEE_CV_TURN_STREAK_MAX = 4
 _FLEE_SWEEP_RECHECK_EVERY = 4          # 이만큼 방향을 돌 때마다 VLM으로 "아직 있는지" 재확인
 # 실측(dev_log.md, seed=7): close_range_bearing()으로 이미 명중까지
 # 시켰는데(flee_ever_attacked=True) 그 다음 틱에 갑자기 못 찾으면, 적
@@ -164,8 +185,9 @@ _FLEE_SWEEP_RECHECK_EVERY = 4          # 이만큼 방향을 돌 때마다 VLM�
 # "안 보였을 뿐일 수도 있다"고 24방향(최대 72틱) 풀스윕을 다 도는 건
 # 낭비다. 짧게만 확인하고 없으면 바로 복귀한다.
 _FLEE_SWEEP_QUICK_CHECK_HEADINGS = 4
-_FLEE_STRIKE_MAX_TICKS = (             # 안전 상한: VLM 조준 실패 후 sweep 풀 사이클까지 감안
-    _FLEE_SWEEP_HEADINGS * (_FLEE_SWEEP_ATTACKS_PER_HEADING + 1) + 4
+_FLEE_STRIKE_MAX_TICKS = (             # 안전 상한: scan 한 바퀴 + sweep 풀 사이클
+    _FLEE_SCAN_HEADINGS
+    + _FLEE_SWEEP_HEADINGS * (_FLEE_SWEEP_ATTACKS_PER_HEADING + 1) + 4
 )
 _FLEE_VLM_MAX_CALLS = VLM_MAX_CALLS_PER_EPISODE  # 전투 조준 + 막힌 방향 VLM 확인이 이 예산을 공유
 
@@ -207,6 +229,9 @@ class ExplorerPolicy:
         self.flee_ticks = 0
         self.flee_ever_attacked = False  # 이번 전투에서 한 번이라도 ATTACK을 냈는지
         self.flee_sweep_active = False   # CV가 못 찾아서(또는 안 죽어서) 결정론적 sweep으로 전환했는지
+        self.flee_scan_headings_done = 0  # 공격 없이 돌며 CV로 찾는 훑기 패스 진행도
+        self.flee_cv_turn_streak = 0      # CV를 따라 연속으로 돌기만 한 틱 수
+        self.flee_aimed_attacks = 0       # CV로 조준해서(눈감고 말고) 때린 횟수
         self.flee_sweep_headings_done = 0
         self.flee_sweep_attacks_done = 0
         self.flee_sweep_heading_limit = _FLEE_SWEEP_HEADINGS
@@ -336,6 +361,9 @@ class ExplorerPolicy:
             self.flee_ticks = 0
             self.flee_ever_attacked = False
             self.flee_sweep_active = False
+            self.flee_scan_headings_done = 0
+            self.flee_cv_turn_streak = 0
+            self.flee_aimed_attacks = 0
             self.flee_sweep_headings_done = 0
             self.flee_sweep_attacks_done = 0
             self.flee_sweep_heading_limit = _FLEE_SWEEP_HEADINGS
@@ -1151,6 +1179,68 @@ class ExplorerPolicy:
             return None
         return _WALL_RGB_BY_NAME.get(node.wall_color)
 
+    def _flee_cv_aim(self, hud, obs):
+        """CV로 적을 찾아 이번 틱의 행동(공격/회전/전진)을 정한다. 못 찾으면 None.
+
+        1순위는 근접 전용 방위 추정(enemies.close_range_bearing). 실측
+        확인(dev_log.md, seed=7): strike 진입 시점엔 적이 이미 1.3~1.5m
+        코앞이라 몸통이 화면을 거의 다 채워서, detect()의 사람형 비율/
+        바닥접점 판정이 구조적으로 0개만 반환한다. close_range_bearing은
+        사람형 판정 없이 "벽도 바닥도 아닌 큰 덩어리"만 보므로 이 거리에서도
+        먹힌다(이미 HP가 깎여 진입한 상태라 오탐 위험도 낮음). 2순위는
+        중간 거리용 사람형 탐지 — 적이 아직 근접하기 전이거나 방금 물러난
+        경우다.
+        """
+        wall_rgb = self._current_wall_rgb(hud)
+        distance = None
+        bearing = EN.close_range_bearing(obs, wall_rgb=wall_rgb)
+        streak_cap = _CLOSE_RANGE_ATTACK_STREAK_MAX
+        if bearing is None:
+            mobs = EN.detect(obs, wall_rgb=wall_rgb)
+            best = next((m for m in mobs if m.score >= _MOB_MIN_SCORE
+                         and m.distance <= _MOB_MAX_COMBAT_DIST_M), None)
+            if best is None:
+                self.flee_cv_turn_streak = 0
+                return None
+            bearing, distance = best.bearing, best.distance
+            streak_cap = _FASTPATH_ATTACK_STREAK_MAX
+        if self.flee_fastpath_attack_streak >= streak_cap:
+            # 여기 걸리면 "연속으로 이만큼 때렸는데 안 죽는다" = 지금 보고
+            # 있는 덩어리가 적이 아니다(문틈 너머 풍경, 벽 등). 이번 틱은
+            # CV를 접고 탐색(scan/sweep)에 넘긴다.
+            #
+            # 실측으로 발견한 버그(seed=0, trace_fight): 이 카운터가 전투
+            # 내내 누적되기만 하고 안 끊겨서, 초반에 오탐을 8번 때린 순간
+            # 그 전투 내내 CV 조준이 통째로 꺼졌다. 그 뒤 회전하다 진짜 적이
+            # 정면 1.4m(cr=8.2도, 콘 안)에 들어왔는데도 공격 대신 그냥
+            # 지나쳐 돌았고, 결국 못 죽이고 두 번 더 맞았다. 지금은 공격이
+            # 아닌 행동을 한 틱이라도 하면 호출자가 0으로 되돌린다 —
+            # 그래서 이 상한은 "연속 헛스윙"만 센다.
+            return None
+
+        if abs(bearing) <= _ATTACK_CONE_HALF_DEG:
+            if distance is not None and distance > _ATTACK_RANGE_M:
+                # 방향(콘)은 이미 맞는데 사거리(3.0m) 밖 — 실측으로 확인된
+                # 버그: 이 경우도 "정렬 안 됨"으로 보고 회전만 시켰더니,
+                # 회전은 거리를 못 좁히니 bearing 부호가 살짝씩 뒤집히며
+                # 좌우로 영원히 진동만 하고 한 번도 공격을 못 했다
+                # (dev_log.md). 전진해서 거리부터 좁힌다.
+                self._last_action_was_forward = True
+                return self._Action.MOVE_FORWARD
+            self.flee_ever_attacked = True
+            self.flee_aimed_attacks += 1
+            self.flee_fastpath_attack_streak += 1
+            self.flee_cv_turn_streak = 0
+            return self._Action.ATTACK
+
+        # 콘 밖 — 정확한 방위로 회전한다. 다만 계속 따라 돌기만 하고 한 번도
+        # 콘에 못 넣으면(대개 문틈/벽 같은 오탐 덩어리를 쫓는 중) 끊고
+        # scan/sweep에 넘긴다.
+        if self.flee_cv_turn_streak >= _FLEE_CV_TURN_STREAK_MAX:
+            return None
+        self.flee_cv_turn_streak += 1
+        return self._Action.TURN_LEFT if bearing > 0 else self._Action.TURN_RIGHT
+
     def _step_flee_strike(self, hud, obs):
         # 후진은 거리를 못 벌린다는 게 실측 확인됐으므로(위 상단 주석 참고)
         # 맞은 그 자리에서 바로 대응한다. 1순위는 agent.enemies의 순수 CV
@@ -1172,44 +1262,32 @@ class ExplorerPolicy:
         if self.flee_ticks > _FLEE_STRIKE_MAX_TICKS:
             return self._resume_after_flee()
 
+        # 1) CV 조준 — scan/sweep 중에도 매 틱 돌린다. 예전엔 sweep으로
+        #    한 번 넘어가면 CV를 다시 안 봐서, 적이 회전 중에 시야에
+        #    들어와도 계속 눈감고 휘두르기만 했다. CV는 1~2ms라 매 틱
+        #    돌려도 공짜에 가깝다.
+        action = self._flee_cv_aim(hud, obs)
+        if action is not None:
+            if action != self._Action.ATTACK:
+                self.flee_fastpath_attack_streak = 0
+            return action
+        # CV 조준이 이번 틱에 아무 것도 못 냈다 = 이제부터 하는 건 조준이
+        # 아니라 탐색이다. "연속 공격" 카운터는 여기서 끊어준다 — 아래
+        # _flee_cv_aim 주석 참고(실측으로 발견한 버그).
+        self.flee_fastpath_attack_streak = 0
+
+        # 2) 훑기(scan) 패스: 공격 없이 15도씩 돌면서 매 틱 위 CV로 찾는다
+        #    (_FLEE_SCAN_HEADINGS 주석 참고 — 같은 각도를 sweep보다 3배
+        #    빨리 훑고, 찾는 즉시 조준 공격으로 넘어간다).
+        scan_limit = (_FLEE_SCAN_QUICK_HEADINGS if self.flee_aimed_attacks
+                      else _FLEE_SCAN_HEADINGS)
+        if self.flee_scan_headings_done < scan_limit:
+            self.flee_scan_headings_done += 1
+            return self._Action.TURN_RIGHT
+
         if not self.flee_sweep_active:
-            # 1순위: 근접 전용 방위 추정(enemies.close_range_bearing). 실측
-            # 확인(dev_log.md, seed=7): strike 진입 시점엔 적이 이미
-            # 1.3~1.5m 코앞이라 몸통이 화면을 거의 다 채워서, detect()의
-            # 사람형 비율/바닥접점 판정이 구조적으로 0개만 반환하고 매
-            # 전투가 곧장 24방향 sweep(최대 72틱)으로 빠졌다 — "예전처럼
-            # 즉각적으로 안 죽인다"는 원인. close_range_bearing은 사람형
-            # 판정 없이 "벽도 바닥도 아닌 큰 덩어리"만 보므로 이 거리에서도
-            # 먹힌다(이미 HP가 깎여 진입한 상태라 오탐 위험도 낮음).
-            bearing = EN.close_range_bearing(obs, wall_rgb=self._current_wall_rgb(hud))
-            if bearing is not None and self.flee_fastpath_attack_streak < _CLOSE_RANGE_ATTACK_STREAK_MAX:
-                if abs(bearing) <= _ATTACK_CONE_HALF_DEG:
-                    self.flee_ever_attacked = True
-                    self.flee_fastpath_attack_streak += 1
-                    return self._Action.ATTACK
-                return self._Action.TURN_LEFT if bearing > 0 else self._Action.TURN_RIGHT
-
-            # 2순위: 중간 거리용 사람형 탐지(위 1순위가 실패한 경우 —
-            # 예: 적이 아직 근접하기 전, 또는 방금 물러난 경우).
-            mobs = EN.detect(obs, wall_rgb=self._current_wall_rgb(hud))
-            best = next((m for m in mobs if m.score >= _MOB_MIN_SCORE
-                         and m.distance <= _MOB_MAX_COMBAT_DIST_M), None)
-            if best is not None and self.flee_fastpath_attack_streak < _FASTPATH_ATTACK_STREAK_MAX:
-                if abs(best.bearing) <= _ATTACK_CONE_HALF_DEG:
-                    if best.distance <= _ATTACK_RANGE_M:
-                        self.flee_ever_attacked = True
-                        self.flee_fastpath_attack_streak += 1
-                        return self._Action.ATTACK
-                    # 방향(콘)은 이미 맞는데 사거리(3.0m) 밖 — 실측으로
-                    # 확인된 버그: 이 경우도 "정렬 안 됨"으로 보고 회전만
-                    # 시켰더니, 회전은 거리를 못 좁히니 bearing 부호가
-                    # 살짝씩 뒤집히며 좌우로 영원히 진동만 하고 한 번도
-                    # 공격을 못 했다(dev_log.md). 전진해서 거리부터 좁힌다.
-                    self._last_action_was_forward = True
-                    return self._Action.MOVE_FORWARD
-                return self._Action.TURN_LEFT if best.bearing > 0 else self._Action.TURN_RIGHT
-
-            # 둘 다 못 찾으면 곧장 sweep으로(VLM 조준은 안 씀 — 위 주석 참고).
+            # 한 바퀴 다 훑고도 CV가 아무것도 못 찾음 → 눈감고 휘두르는
+            # 안전망(VLM 조준은 안 씀 — 위 주석 참고).
             self.flee_sweep_active = True
             self.flee_sweep_headings_done = 0
             self.flee_sweep_attacks_done = 0
@@ -1259,6 +1337,9 @@ class ExplorerPolicy:
     def _resume_after_flee(self):
         self.flee_phase = None
         self.flee_sweep_active = False
+        self.flee_scan_headings_done = 0
+        self.flee_cv_turn_streak = 0
+        self.flee_aimed_attacks = 0
         self.flee_sweep_headings_done = 0
         self.flee_sweep_attacks_done = 0
         self.flee_sweep_heading_limit = _FLEE_SWEEP_HEADINGS

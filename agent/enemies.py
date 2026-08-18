@@ -242,6 +242,9 @@ _CLOSE_RANGE_WALL_DIFF = 120   # RGB 채널합 기준 벽색과의 최소 차이
 # 이 차이로 "코앞의 진짜 몸체"와 "멀리 문틈 너머 풍경"을 가른다.
 _CLOSE_RANGE_BOTTOM_FRAC_MIN = 0.20  # 맨 아래 20% 구간에서 요구하는 최소 후보 비율
 _CLOSE_RANGE_BOTTOM_BAND = 0.20      # 프레임 하단 몇 %를 "발밑" 구간으로 볼지
+# 발밑 구간에서 "여기가 몸통이다"로 볼 열의 최소 세로 채움 비율. 몸통이
+# 지나가는 열은 발밑 띠를 거의 다 채우고, 배경이 걸친 열은 드문드문하다.
+_CLOSE_RANGE_RUN_COVER = 0.5
 
 
 def close_range_bearing(frame: np.ndarray, wall_rgb: Optional[Tuple[int, int, int]] = None,
@@ -265,12 +268,24 @@ def close_range_bearing(frame: np.ndarray, wall_rgb: Optional[Tuple[int, int, in
     if mask.mean() < min_frac:
         return None
     bottom_start = int(mask.shape[0] * (1.0 - _CLOSE_RANGE_BOTTOM_BAND))
-    if mask[bottom_start:].mean() < _CLOSE_RANGE_BOTTOM_FRAC_MIN:
+    bottom = mask[bottom_start:]
+    if bottom.mean() < _CLOSE_RANGE_BOTTOM_FRAC_MIN:
         return None
-    col_weight = mask.sum(axis=0).astype(np.float64)
-    total = col_weight.sum()
-    if total <= 0:
+    # 방위는 "발밑 띠에서 세로로 꽉 찬 열이 연속으로 이어지는 가장 넓은
+    # 구간"의 중심으로 잡는다. 예전엔 후보 픽셀 전체의 열 무게중심을 썼는데,
+    # 실측(close_frames 595장, env 내부 진짜 방위와 대조)으로 그게 심하게
+    # 편향된다는 게 확인됐다 — 적이 화면 가장자리에 있어도 배경 잡음이
+    # 무게중심을 화면 중앙으로 끌어당겨서, 진짜 적이 -40도에 있는데 -4도
+    # (=공격 콘 안)라고 답하고 계속 헛스윙을 했다. 실측 비교:
+    #   무게중심   중앙값 오차 42.1도, 공격 명중률 10%
+    #   최대연속구간 중앙값 오차 10.7도, 공격 명중률 36%
+    # 몸통은 발밑 띠를 세로로 꽉 채우며 가로로 이어지는 반면 배경/문틈은
+    # 드문드문해서, 이 "가장 넓은 연속 구간"이 곧 몸통의 가로 위치가 된다.
+    cover = bottom.mean(axis=0) >= _CLOSE_RANGE_RUN_COVER
+    edges = np.flatnonzero(np.diff(np.r_[False, cover, False]))
+    if len(edges) == 0:
         return None
-    cols = np.arange(len(col_weight))
-    centroid_col = float((cols * col_weight).sum() / total)
-    return -math.degrees(math.atan((centroid_col - geo.CX) / geo.FOCAL))
+    starts, ends = edges[::2], edges[1::2]
+    widest = int(np.argmax(ends - starts))
+    center_col = (int(starts[widest]) + int(ends[widest]) - 1) / 2.0
+    return -math.degrees(math.atan((center_col - geo.CX) / geo.FOCAL))

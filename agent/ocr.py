@@ -78,6 +78,12 @@ class _GlyphSet:
     masks: list  # list[np.ndarray[bool]], 문자별 잉크 마스크 (height, width)
     height: int
     width_groups: dict  # width -> (chars_str, stacked_masks (n, height, width) bool)
+    # 아래 셋은 _match_at의 완전 벡터화용 — 알파벳 전체를 최대 너비로
+    # 오른쪽 패딩해 하나로 쌓아둔 것. 각 글자의 진짜 너비(padded_widths)까지
+    # 들고 있으면 "자기 폭까지만 세기"를 누적합 한 번으로 처리할 수 있다.
+    padded: np.ndarray = None       # (n_chars, height, max_width) bool
+    padded_widths: np.ndarray = None  # (n_chars,) int
+    max_width: int = 0
 
 
 @lru_cache(maxsize=4)
@@ -128,14 +134,103 @@ def _build_glyph_set(size: int) -> _GlyphSet:
         w: ("".join(chs), np.stack(ms))
         for w, (chs, ms) in groups.items()
     }
+    max_w = max(m.shape[1] for m in masks)
+    padded = np.zeros((len(masks), y1 - y0, max_w), dtype=bool)
+    for i, m in enumerate(masks):
+        padded[i, :, :m.shape[1]] = m
+    widths = np.array([m.shape[1] for m in masks], dtype=np.int64)
     return _GlyphSet(font=font, chars=_ALPHABET, masks=masks, height=y1 - y0,
-                      width_groups=width_groups)
+                      width_groups=width_groups, padded=padded,
+                      padded_widths=widths, max_width=max_w)
 
 
-def _read_line(ink: np.ndarray, glyphs: _GlyphSet, x_start: int, x_end: int,
-               y_off: int, dx_search=_DX_SEARCH_NARROW,
-               dy_search=_DY_SEARCH_NARROW) -> str:
-    """ink: (height, width) bool 배열(잉크=True). [x_start, x_end) 구간을
+def _match_at_slow(ink: np.ndarray, glyphs: _GlyphSet, cursor: int, y_off: int,
+                   dx_search, dy_search):
+    """한 커서 위치에서 (점수, 글자, 너비, 시작열)을 고르는 기준 구현.
+
+    같은 너비의 문자들만 (n,h,w)로 묶어 비교한다. 아래 _match_at이 이걸
+    (dx,dy)까지 포함해 통째로 벡터화한 버전이고, 프레임 오른쪽 끝처럼
+    벡터화 창이 안 잡히는 자리에서만 이 구현으로 되돌아온다.
+    """
+    gh = glyphs.height
+    best = None  # (score, char, width, actual_cursor)
+    for dx in dx_search:
+        c0 = cursor + dx
+        if c0 < 0:
+            continue
+        for dy in dy_search:
+            yy = y_off + dy
+            if yy < 0 or yy + gh > ink.shape[0]:
+                continue
+            for w, (chs, stacked) in glyphs.width_groups.items():
+                if c0 + w > ink.shape[1]:
+                    continue
+                crop = ink[yy:yy + gh, c0:c0 + w]
+                if crop.shape[0] != gh or crop.shape[1] != w:
+                    continue
+                scores = (stacked == crop[None, :, :]).mean(axis=(1, 2))
+                idx = int(scores.argmax())
+                s = float(scores[idx])
+                if best is None or s > best[0]:
+                    best = (s, chs[idx], w, c0)
+    return best
+
+
+def _match_at(ink: np.ndarray, glyphs: _GlyphSet, cursor: int, y_off: int,
+              dx_search, dy_search):
+    """_match_at_slow와 같은 결과를, 커서당 numpy 호출 몇 번으로 구한다.
+
+    기존 구현은 커서 하나마다 (dx x dy x 너비그룹) = 150번쯤 되는 작은
+    numpy 호출을 돌았고, 배열이 작아서 사실상 호출 오버헤드만 냈다 —
+    HUD 한 줄에 ~62ms, 즉 이 에이전트에서 한 틱을 통틀어 가장 비싼 연산
+    이었다(EN.detect 1.6ms와 비교). env가 벽시계로 적 AI를 돌리므로
+    (README) 이 지연은 곧 전투 중 "더 맞는다"가 된다.
+
+    여기서는 알파벳 전체를 최대 너비로 패딩해 쌓아둔 배열(_GlyphSet.padded)
+    하나로 모든 (dx,dy) 후보 창을 한 번에 비교한다. 글자마다 너비가 다른
+    건 열 방향 누적합에서 자기 너비 지점을 꺼내 쓰는 것으로 처리한다.
+    동점 처리 우선순위(dx/dy 탐색 순서 -> 알파벳 등장 순서)는 기존과
+    동일하게 유지한다 — 안 그러면 같은 점수의 다른 글자가 뽑혀 문자열이
+    달라질 수 있다.
+    """
+    gh, mw = glyphs.height, glyphs.max_width
+    H, W = ink.shape
+    offs = [(cursor + dx, y_off + dy)
+            for dx in dx_search for dy in dy_search
+            if cursor + dx >= 0 and 0 <= y_off + dy and y_off + dy + gh <= H]
+    # 창이 프레임 오른쪽 끝을 넘는 자리는 좁은 글자만 후보가 되므로
+    # 패딩 비교로 못 다룬다 — 그런 자리는 기준 구현에 맡긴다.
+    if not offs or any(c0 + mw > W for c0, _ in offs):
+        return _match_at_slow(ink, glyphs, cursor, y_off, dx_search, dy_search)
+    xs = np.array([c0 for c0, _ in offs])
+    ys = np.array([yy for _, yy in offs])
+    win = np.lib.stride_tricks.sliding_window_view(ink, (gh, mw))
+    crops = win[ys, xs]                                  # (k, gh, mw)
+    eq = glyphs.padded[:, None, :, :] == crops[None]     # (n, k, gh, mw)
+    per_col = eq.sum(axis=2)                             # (n, k, mw)
+    cum = np.cumsum(per_col, axis=2)
+    widths = glyphs.padded_widths
+    matched = cum[np.arange(len(widths)), :, widths - 1]  # (n, k) 자기 너비까지만
+    scores = matched / (gh * widths)[:, None]
+    top = float(scores.max())
+    # 동점자 중에서 (dx,dy) 탐색 순서가 앞서는 것 -> 알파벳 순서가 앞서는 것.
+    ci, ki = np.nonzero(scores >= top - 1e-12)
+    order = np.lexsort((ci, ki))                          # ki 우선, 동률이면 ci
+    c, k = int(ci[order[0]]), int(ki[order[0]])
+    return (top, glyphs.chars[c], int(widths[c]), int(xs[k]))
+
+
+def _read_line_segments(ink: np.ndarray, glyphs: _GlyphSet, x_start: int,
+                        x_end: int, y_off: int, dx_search=_DX_SEARCH_NARROW,
+                        dy_search=_DY_SEARCH_NARROW) -> list:
+    """_read_line의 알맹이. 읽어낸 글자를 (글자, 다음_커서) 목록으로 준다.
+
+    문자열만 필요하면 _read_line을 쓴다. 이 목록 형태는 read_hud의 증분
+    재읽기(_hud_incremental)가 "픽셀이 안 바뀐 앞부분은 지난 프레임 결과를
+    그대로 쓰고, 바뀐 지점부터만 다시 읽기" 위해 글자 경계 위치를 알아야
+    해서 필요하다.
+
+    ink: (height, width) bool 배열(잉크=True). [x_start, x_end) 구간을
     왼쪽부터 그리디하게 한 글자씩 읽어 문자열로 복원한다.
 
     y_off: 참조 글리프(높이 glyphs.height, 알파벳 전체의 잉크 상단에 맞춰
@@ -157,41 +252,28 @@ def _read_line(ink: np.ndarray, glyphs: _GlyphSet, x_start: int, x_end: int,
     stall_guard = 0
     while cursor < x_end and stall_guard < 500:
         stall_guard += 1
-        best = None  # (score, char, width, actual_cursor)
-        for dx in dx_search:
-            c0 = cursor + dx
-            if c0 < 0:
-                continue
-            for dy in dy_search:
-                yy = y_off + dy
-                if yy < 0 or yy + gh > ink.shape[0]:
-                    continue
-                # 같은 너비의 문자들을 (n,h,w) 배열로 한 번에 비교 —
-                # 문자 하나하나 개별 numpy 호출하는 것보다 훨씬 빠르다
-                # (위 _GlyphSet.width_groups 주석 참고). 동점 처리 순서는
-                # 알파벳 등장 순서와 동일하게 보존됨.
-                for w, (chs, stacked) in glyphs.width_groups.items():
-                    if c0 + w > ink.shape[1]:
-                        continue
-                    crop = ink[yy:yy + gh, c0:c0 + w]
-                    if crop.shape[0] != gh or crop.shape[1] != w:
-                        continue
-                    scores = (stacked == crop[None, :, :]).mean(axis=(1, 2))
-                    idx = int(scores.argmax())
-                    s = float(scores[idx])
-                    if best is None or s > best[0]:
-                        best = (s, chs[idx], w, c0)
+        best = _match_at(ink, glyphs, cursor, y_off, dx_search, dy_search)
         if best is None or best[0] < _MATCH_MIN_SCORE:
             break
         score, ch, w, actual_cursor = best
-        out.append(ch)
+        out.append((ch, cursor))   # 다음 줄에서 실제 전진 위치로 덮어씀
         # dx가 크게 음수인 후보가 이기면 actual_cursor+w가 현재 cursor를
         # 못 넘어설 수 있다 — 그러면 다음 반복에서 똑같은 위치가 다시
         # 최고점을 받아 커서가 멈춘 채로 stall_guard까지 도는 무한
         # 루프가 된다(실측: 넓어진 dx 탐색 범위에서 발견). 최소 1px는
         # 항상 전진하도록 강제한다.
         cursor = max(cursor + 1, actual_cursor + w)
-    return "".join(out).rstrip()
+        out[-1] = (out[-1][0], cursor)
+    return out
+
+
+def _read_line(ink: np.ndarray, glyphs: _GlyphSet, x_start: int, x_end: int,
+               y_off: int, dx_search=_DX_SEARCH_NARROW,
+               dy_search=_DY_SEARCH_NARROW) -> str:
+    """[x_start, x_end) 구간을 읽어 문자열로 돌려준다(_read_line_segments 래퍼)."""
+    segs = _read_line_segments(ink, glyphs, x_start, x_end, y_off,
+                               dx_search, dy_search)
+    return "".join(ch for ch, _ in segs).rstrip()
 
 
 def _ink_mask(rgb: np.ndarray) -> np.ndarray:
@@ -232,6 +314,54 @@ class HudReading:
     raw_text: str = ""
 
 
+# --- HUD 증분 재읽기 --------------------------------------------------
+# HUD 한 줄 전체를 글자 단위로 매칭하면 프레임당 ~64ms다(실측). 이건
+# 전투 중에 특히 비싸다 — 회전할 때마다 "dir NNN°"가 바뀌어서 픽셀 해시
+# 캐시(explorer._read_hud_cached)가 매번 빗나가고, 결국 회전 한 틱이
+# 64ms를 먹는다. env는 벽시계 기준으로 적 AI를 돌리므로(README) 이 지연은
+# 그대로 "돌아보는 동안 더 맞는다"가 된다.
+#
+# 그런데 실제로 바뀌는 건 줄의 일부뿐이다(회전=방향 숫자, 1초마다=남은
+# 시간, 피격=HP). 방 이름처럼 긴 앞부분은 그대로다. 그래서 지난 프레임의
+# 잉크 마스크와 글자 경계를 들고 있다가, 픽셀이 처음 달라지는 열을 찾아
+# 그 앞의 글자들은 지난 결과를 그대로 쓰고 거기서부터만 다시 읽는다.
+_HUD_CACHE: dict = {"ink": None, "y_off": None, "x0": None, "segs": None}
+
+
+def _hud_resume_margin(glyphs: _GlyphSet) -> int:
+    """증분 재읽기를 시작해도 안전한, "바뀐 열"로부터의 여유 폭(px).
+
+    _read_line_segments는 커서마다 dx만큼 뒤로 물러난 위치에서 모든 너비의
+    글리프를 다 대보고 최고점을 고른다 — 즉 어떤 글자의 판정은 그 글자가
+    차지한 폭보다 오른쪽 픽셀까지 본다. 재사용하는 앞부분이 "지난 프레임과
+    픽셀이 같은 구간"만 보고 결정된 것이 되려면 그만큼 여유를 둬야 한다.
+    """
+    return max(glyphs.width_groups) + max(abs(d) for d in _DX_SEARCH_NARROW) + 1
+
+
+def _read_hud_line(ink: np.ndarray, glyphs: _GlyphSet, x0: int, x1: int,
+                   y_off: int) -> str:
+    """HUD 한 줄을 읽되, 지난 프레임과 안 바뀐 앞부분은 재사용한다."""
+    prev = _HUD_CACHE
+    segs = None
+    if (prev["segs"] is not None and prev["ink"] is not None
+            and prev["ink"].shape == ink.shape
+            and prev["y_off"] == y_off and prev["x0"] == x0):
+        changed = np.flatnonzero((prev["ink"] != ink).any(axis=0))
+        if len(changed) == 0:
+            segs = prev["segs"]                    # HUD가 통째로 그대로
+        else:
+            safe_x = int(changed[0]) - _hud_resume_margin(glyphs)
+            keep = [s for s in prev["segs"] if s[1] <= safe_x]
+            if keep:
+                cursor = keep[-1][1]
+                segs = keep + _read_line_segments(ink, glyphs, cursor, x1, y_off)
+    if segs is None:
+        segs = _read_line_segments(ink, glyphs, x0, x1, y_off)
+    _HUD_CACHE.update(ink=ink, y_off=y_off, x0=x0, segs=segs)
+    return "".join(ch for ch, _ in segs).rstrip()
+
+
 def read_hud(frame: np.ndarray) -> HudReading:
     """frame: (240,320,3) uint8 전체 관찰 프레임. 상단 HUD 바만 읽는다."""
     bar = frame[:_HUD_BAR_HEIGHT, :, :]
@@ -243,7 +373,7 @@ def read_hud(frame: np.ndarray) -> HudReading:
     ink_rows = np.where(ink.any(axis=1))[0]
     y_off = int(ink_rows.min())
     glyphs = _build_glyph_set(_HUD_FONT_SIZE)
-    text = _read_line(ink, glyphs, x0, x1, y_off)
+    text = _read_hud_line(ink, glyphs, x0, x1, y_off)
     m = _HUD_RE.match(text)
     if not m:
         return HudReading(ok=False, raw_text=text)
