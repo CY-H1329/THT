@@ -1,26 +1,30 @@
-"""프레임 픽셀 → 방향별 자유 거리(depth) 추출 + 카메라 기하 상수.
+"""Frame pixels -> free distance (depth) per direction, plus camera geometry constants.
 
-핵심 아이디어: 이 env의 바닥은 항상 흑백 체커보드(floor_tiles_bw)라
-채도(saturation)가 0에 가깝고, 벽은 WALL_PALETTE의 유채색, 3D 오브젝트/
-적도 대부분 유채색이다. 그래서 각 픽셀 열(column)을 화면 아래에서 위로
-훑다가 "채도가 임계값을 넘는 첫 행"을 찾으면 그게 그 방향에서 바닥이
-끝나는 지점 = 가장 가까운 장애물(벽/오브젝트/적)의 밑동이다.
+Core idea: this env's floor is always a black-and-white checkerboard
+(floor_tiles_bw), so its saturation is close to 0, while walls (from
+WALL_PALETTE), 3D objects, and enemies are almost all saturated colors.
+So scanning each pixel column from the bottom of the screen upward and
+finding the first row where saturation crosses a threshold gives the
+row where the floor ends in that direction -- i.e. the base of the
+nearest obstacle (wall/object/enemy).
 
-카메라는 domain_rand=False라 파라미터가 고정이다(env.py 소스 확인:
-_MWWorld가 MiniWorldEnv를 domain_rand=False로 생성). miniworld
-DEFAULT_PARAMS 기본값(cam_height 1.5m, fov_y 60°, pitch 0, forward_step
-0.15m, turn_step 15°)이 그대로 적용된다 — 실측(tmp/debug_retreat_movement.py:
-MOVE_BACK 한 스텝당 0.150m 정확히 일치)으로도 확인됨. 따라서 바닥 밑동의
-행 좌표 y는 거리로 정확히 역산된다:
+The camera is created with domain_rand=False, so its parameters are
+fixed (confirmed in the env.py source: _MWWorld constructs MiniWorldEnv
+with domain_rand=False). That means miniworld's DEFAULT_PARAMS apply as-is
+(cam_height 1.5 m, fov_y 60 deg, pitch 0, forward_step 0.15 m, turn_step
+15 deg) -- also confirmed by measurement (one MOVE_BACK step moved
+exactly 0.150 m). So the row coordinate y of the floor's edge converts
+exactly back to a distance:
 
-    dz = cam_height * focal / (y - cy)      # 광축 방향 거리
+    dz = cam_height * focal / (y - cy)      # distance along the optical axis
     d  = dz * sqrt(1 + u^2),  u = (x - cx)/focal
 
-이 공식과 상수들은 참고 레포(CY-H1329/THT, dev-mouvement 브랜치)의
-agent/geometry.py에서 아이디어를 얻었고, 실측(tmp/verify_geometry.py)으로
-우리 env에서 직접 재검증했다. memory_fps_env는 import하지 않는다 —
-상수는 miniworld 기본값을 픽셀에서 재확인한 값이며, 에이전트는 obs
-프레임만으로 동작한다.
+The idea for this formula and these constants came from a reference
+repo (CY-H1329/THT, dev-mouvement branch -- an earlier branch of this
+same project) and was independently re-verified by measurement against
+this env. memory_fps_env itself is never imported -- these constants
+are just miniworld's own defaults, re-confirmed from pixels; the agent
+still only ever acts on the obs frame.
 """
 
 from __future__ import annotations
@@ -31,42 +35,44 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-# --- 카메라/프레임 상수 -------------------------------------------------
+# Camera/frame constants
 FRAME_H, FRAME_W = 240, 320
-HUD_H = 28                      # 상단 HUD 바가 덮는 행 수
+HUD_H = 28                      # rows covered by the top HUD bar
 FOV_Y_DEG = 60.0
 CAM_HEIGHT = 1.5                # m
-FOCAL = (FRAME_H / 2.0) / math.tan(math.radians(FOV_Y_DEG / 2.0))  # ≈207.85 px
+FOCAL = (FRAME_H / 2.0) / math.tan(math.radians(FOV_Y_DEG / 2.0))  # ~= 207.85 px
 CX = (FRAME_W - 1) / 2.0
 CY = (FRAME_H - 1) / 2.0
-FOV_X_DEG = 2.0 * math.degrees(math.atan(CX / FOCAL))  # ≈75°
+FOV_X_DEG = 2.0 * math.degrees(math.atan(CX / FOCAL))  # ~= 75 deg
 
-# 이동/회전 단위 (miniworld DEFAULT_PARAMS, domain_rand=False로 고정)
+# Movement/turn units (miniworld DEFAULT_PARAMS, fixed by domain_rand=False)
 FORWARD_STEP = 0.15             # m per MOVE_FORWARD/MOVE_BACK
 TURN_STEP = 15.0                # deg per TURN_LEFT/RIGHT
 AGENT_RADIUS = 0.4              # m
 
-# --- 센서 파라미터 ------------------------------------------------------
-_SAT_THRESHOLD = 18             # 이 채도 미만이면 "바닥(무채색 체커보드)"
-MAX_RANGE = 20.0                # 이 이상은 "열려 있음"으로 뭉뚱그림
-# 프레임 맨 아랫행이 보는 바닥 거리. 이보다 가까운 장애물은 바닥을 전부
-# 가려서 거리를 못 재므로 NEAR_RANGE로 보고한다.
-FLOOR_MIN_RANGE = CAM_HEIGHT * FOCAL / (FRAME_H - 1 - CY)   # ≈2.6 m
+# Sensing parameters
+_SAT_THRESHOLD = 18             # below this saturation, treat the pixel as floor (achromatic checkerboard)
+MAX_RANGE = 20.0                # anything past this is just reported as "open"
+# Floor distance seen by the very bottom row of the frame. An obstacle
+# closer than this hides the floor entirely, so we can't measure it and
+# report NEAR_RANGE instead.
+FLOOR_MIN_RANGE = CAM_HEIGHT * FOCAL / (FRAME_H - 1 - CY)   # ~= 2.6 m
 NEAR_RANGE = 0.6
 
 
 def wrap180(deg: float) -> float:
-    """각도를 (-180, 180] 범위로 접는다."""
+    """Wrap an angle into (-180, 180]."""
     return (deg + 180.0) % 360.0 - 180.0
 
 
 @lru_cache(maxsize=8)
 def column_bearings(n_cols: int) -> tuple:
-    """열 인덱스 → 현재 heading 기준 상대 방위각(도).
+    """Column index -> relative bearing (degrees) from the current heading.
 
-    화면 오른쪽 = heading이 감소하는 쪽(TURN_RIGHT가 heading을 줄이는
-    방향과 일치, agent/explorer.py의 _heading_diff 참고)이므로 부호를
-    뒤집어 "이 열이 바라보는 절대 heading = heading + bearing"이 되게 한다.
+    The right side of the screen is the direction where heading
+    decreases (matching how TURN_RIGHT decreases heading -- see
+    _heading_diff in agent/explorer.py), so we flip the sign so that
+    "the absolute heading this column is looking at" = heading + bearing.
     """
     cw = FRAME_W / n_cols
     out = []
@@ -77,13 +83,13 @@ def column_bearings(n_cols: int) -> tuple:
 
 
 def saturation(frame: np.ndarray) -> np.ndarray:
-    """픽셀별 (최대채널 - 최소채널). 바닥 판정과 몹 판정이 둘 다 이 값을
-    쓰므로, 프레임당 한 번만 구해서 돌려쓴다."""
+    """Per-pixel (max channel - min channel). Both floor detection and
+    mob detection use this, so we compute it once per frame and reuse it."""
     return frame.max(axis=-1).astype(np.int16) - frame.min(axis=-1).astype(np.int16)
 
 
 def floor_mask(frame: np.ndarray, sat: Optional[np.ndarray] = None) -> np.ndarray:
-    """무채색(=바닥 체커보드) 픽셀 마스크."""
+    """Mask of achromatic (floor-checkerboard) pixels."""
     if sat is None:
         sat = saturation(frame)
     return sat < _SAT_THRESHOLD
@@ -91,24 +97,25 @@ def floor_mask(frame: np.ndarray, sat: Optional[np.ndarray] = None) -> np.ndarra
 
 def floor_boundary(frame: np.ndarray, n_cols: int = 40,
                     sat: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
-    """열 묶음별 (바닥이 끝나는 행, 그 지점까지의 거리 m).
+    """Per column-bucket: (row where the floor ends, distance to that point in m).
 
-    행 좌표는 깊이뿐 아니라 "그 장애물이 바닥에 닿아 있는가"를 판정하는
-    데도 쓰인다(enemies.py). 벽에 걸린 사진 액자는 높이 0.75~2.25m에 떠
-    있어서 바닥 경계선 바로 위가 벽색인 반면, 몹과 오브젝트는 자기 색이
-    바닥까지 이어진다.
+    The row coordinate is also used (in enemies.py) to judge whether an
+    obstacle is actually touching the floor. A wall-hung picture floats
+    at 0.75-2.25 m, so just above the floor boundary is still wall
+    color, whereas a mob or floor object's own color extends all the
+    way down to the floor.
     """
     floor = floor_mask(frame, sat)
-    y_lo = int(CY) + 2                      # 지평선 바로 아래부터
+    y_lo = int(CY) + 2                      # start just below the horizon
     band = floor[y_lo:FRAME_H, :]           # (rows, W)
     cw = FRAME_W // n_cols
 
     cols = band[:, :n_cols * cw].reshape(band.shape[0], n_cols, cw).mean(axis=2) > 0.5
-    rev = ~cols[::-1]                        # 아래→위 순서의 "비바닥" 마스크
-    idx = rev.argmax(axis=0)                 # 첫 True 위치 (없으면 0)
+    rev = ~cols[::-1]                        # bottom-to-top "not floor" mask
+    idx = rev.argmax(axis=0)                 # position of the first True (0 if none)
     has_obstacle = rev.any(axis=0)
 
-    y_edge = (FRAME_H - 1) - idx             # 비바닥이 시작되는 행
+    y_edge = (FRAME_H - 1) - idx             # row where non-floor starts
     dy = y_edge + 0.5 - CY
     with np.errstate(divide="ignore", invalid="ignore"):
         dz = CAM_HEIGHT * FOCAL / np.maximum(dy, 1e-6)
@@ -124,20 +131,21 @@ def floor_boundary(frame: np.ndarray, n_cols: int = 40,
 
 def depth_profile(frame: np.ndarray, n_cols: int = 40,
                    sat: Optional[np.ndarray] = None) -> np.ndarray:
-    """열 방향별 자유 거리(m) 배열. 인덱스는 column_bearings(n_cols)와 대응."""
+    """Array of free distance (m) per column. Index lines up with column_bearings(n_cols)."""
     return floor_boundary(frame, n_cols, sat)[1]
 
 
 def height_at(row: float, dist: float) -> float:
-    """거리 dist에 있는 물체의 픽셀 행 row가 대응하는 실제 높이(m)."""
+    """Real-world height (m) an object at distance dist would have to be, to appear at pixel row `row`."""
     return CAM_HEIGHT - dist * (row - CY) / FOCAL
 
 
 def dist_for_height(row: float, height: float) -> float:
-    """높이 height인 물체의 꼭대기가 행 row에 보일 때의 거리(m).
+    """Distance (m) at which an object of the given height would have its top appear at pixel row `row`.
 
-    2.6m보다 가까우면 바닥 경계가 화면 밖이라 거리를 못 재는데, 몹은 키가
-    알려져 있으므로(1.5m/2.0m) 머리 꼭대기 행으로 거꾸로 거리를 추정한다.
+    Below ~2.6 m the floor boundary is off-screen and we can't measure
+    distance that way, but mobs have a known height (1.5 m / 2.0 m), so
+    we work the distance backward from the row where their head appears.
     """
     dy = CY - row
     if dy <= 1e-6:
@@ -147,7 +155,7 @@ def dist_for_height(row: float, height: float) -> float:
 
 def cone_clearance(profile: np.ndarray, center_deg: float = 0.0,
                     half_width_deg: float = 12.0) -> float:
-    """heading 기준 [center±half] 부채꼴 안의 최소 자유 거리."""
+    """Minimum free distance within the [center +/- half] cone around the current heading."""
     bearings = column_bearings(len(profile))
     vals = [d for b, d in zip(bearings, profile)
             if abs(wrap180(b - center_deg)) <= half_width_deg]
@@ -155,18 +163,18 @@ def cone_clearance(profile: np.ndarray, center_deg: float = 0.0,
 
 
 def frame_motion(frame_a: np.ndarray, frame_b: np.ndarray) -> float:
-    """두 프레임의 화면 아래 절반 평균 절대차. MOVE_FORWARD/BACK이 실제로
-    먹혔는지 판정하는 데 쓴다."""
+    """Mean absolute difference over the bottom half of two frames. Used
+    to check whether a MOVE_FORWARD/BACK actually took effect."""
     a = frame_a[FRAME_H // 2:, :].astype(np.int16)
     b = frame_b[FRAME_H // 2:, :].astype(np.int16)
     return float(np.abs(a - b).mean())
 
 
-BLOCKED_MOTION = 4.0   # 이 미만이면 "이동이 막혔다"
+BLOCKED_MOTION = 4.0   # below this, treat movement as "blocked"
 
 
 def region_color(frame: np.ndarray, col_lo: int, col_hi: int) -> tuple:
-    """지정한 열 구간의 지평선 아래 대표색(채널별 중앙값)."""
+    """Representative color (per-channel median) below the horizon, in the given column range."""
     lo = max(0, min(FRAME_W - 1, col_lo))
     hi = max(lo + 1, min(FRAME_W, col_hi))
     band = frame[int(CY):FRAME_H, lo:hi].reshape(-1, 3)
@@ -182,15 +190,18 @@ def color_close(a, b, tol: int = 40) -> bool:
     return all(abs(int(x) - int(y)) <= tol for x, y in zip(a, b))
 
 
-# --- 잠긴 문 자물쇠 판 인식 ------------------------------------------------
-# 실측 확인된 문제(dev_log.md): SEEK가 특정 방향을 계속 "물리적으로 막힘"
-# 으로만 보고 반복 시도하다가, 알고 보니 벽이 아니라 "잠긴 문"(자물쇠
-# 아이콘 판)이었던 사례가 있었다 — 열쇠 없인 절대 못 지나가므로 몇 번을
-# 재시도해도 소용없는데, 그걸 몰라서 시간을 크게 낭비했다. 잠긴 문의
-# 자물쇠 판은 따뜻한 황금색 바탕(실측 RGB (143,130,104)~(196,180,100),
-# R>G>B) 위에 진한 검정/회색 자물쇠 그림이 있다 — 이 조합(황금색 배경 +
-# 그 안의 어두운 얼룩)을 같이 요구해서 mustard 같은 실제 벽 색과 구분한다
-# (mustard는 배경만 비슷하고 안에 어두운 그림이 없음).
+# Locked-door padlock-panel recognition
+# A real problem we hit: SEEK would keep treating a certain direction as
+# just "physically blocked" and retry it over and over, when it turned
+# out not to be a wall at all but a locked door (a padlock-icon panel)
+# -- there's no way through without the key, so retrying was pure wasted
+# time, and not knowing that cost us a lot of it. The locked door's
+# padlock panel has a warm golden background (measured RGB roughly
+# (143,130,104) to (196,180,100), R>G>B) with a dark black/gray padlock
+# graphic on top -- we require both the golden background AND the dark
+# blob inside it together, which is what separates it from an actual
+# wall color like mustard (mustard has a similar background but no dark
+# graphic inside it).
 def _warm_gold(region: np.ndarray) -> np.ndarray:
     r = region[..., 0].astype(np.int32)
     g = region[..., 1].astype(np.int32)
@@ -200,17 +211,21 @@ def _warm_gold(region: np.ndarray) -> np.ndarray:
 
 def lock_visible(frame: np.ndarray, min_warm_frac: float = 0.6,
                   min_dark_frac: float = 0.2) -> bool:
-    """잠긴 문의 자물쇠 판이 화면에 크게 보이는지(SEEK가 이 방향을
-    포기하기 전에 확인하는 용도). 힌트 배너(잠긴 문에 닿을 때만 뜬다)와
-    함께 쓰면 더 확실하지만, 이건 "닿기 전에 멀리서도" 감지하기 위한
-    보조 신호다.
+    """Whether the locked door's padlock panel takes up a large enough
+    part of the frame (used by SEEK to check before giving up on a
+    direction). Pairing this with the hint banner (which only appears
+    once you're actually touching the locked door) is more reliable,
+    but this is meant as a secondary signal that fires "from a distance,
+    before touching it."
 
-    실측(dev_log.md): 처음엔 임계값을 낮게 잡았다가 sand 계열 벽 + 어두운
-    벽그림(예: 상어 사진) 조합에서 오탐이 났다(warm_frac=0.52,
-    dark_frac=0.16). 진짜 잠긴 문(warm_frac=0.66, dark_frac=0.34)과는
-    확실히 갈리길래 두 기준 다 그 사이로 올렸다 — 그래도 샘플이 많지
-    않아 100% 신뢰하진 않는다(오탐지 시 SEEK가 실제로는 열리는 문을
-    "잠김"으로 잘못 건너뛸 위험 있음, report.md에 한계로 기록 예정)."""
+    Measured: the thresholds started lower, and that produced a false
+    positive on a sand-toned wall combined with a dark wall image (e.g.
+    a shark photo) -- warm_frac=0.52, dark_frac=0.16. A real locked door
+    measured clearly higher (warm_frac=0.66, dark_frac=0.34), so both
+    thresholds were raised to sit between the two. The sample size is
+    still small, so this isn't treated as 100% reliable (a false
+    positive would make SEEK wrongly skip a door that actually opens --
+    noted as a limitation to write up in report.md)."""
     region = frame[HUD_H:FRAME_H, FRAME_W // 4: 3 * FRAME_W // 4]
     warm = _warm_gold(region)
     if float(warm.mean()) < min_warm_frac:

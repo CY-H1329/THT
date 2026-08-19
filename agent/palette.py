@@ -1,11 +1,12 @@
-"""방 벽 색 팔레트.
+"""Wall color palette.
 
-memory_fps_env.world.walls.WALL_PALETTE와 값이 같다 — 하지만 그 모듈을
-import하지 않는다(world.* import 금지 규칙). README에 "팔레트는 public/
-heldout 세션에 공유된다"고 명시돼 있어서, 이 12개 (이름, RGB) 값 자체는
-공개된 상수이고 여기 복사해서 쓰는 건 규칙 위반이 아니다 — 우리는 이걸
-'세계 상태를 몰래 읽는 것'이 아니라 '사람이 색을 보고 이름 붙이듯, 픽셀
-색을 알려진 색 이름에 매칭하는 것'으로 쓴다.
+Same values as memory_fps_env.world.walls.WALL_PALETTE, but we don't
+import that module (the world.* import rule forbids it). The README
+states the palette is shared between the public and held-out sessions,
+so these 12 (name, RGB) pairs are public constants and copying them
+here isn't a rule violation -- we're not reading hidden world state,
+we're matching a pixel color to a known color name the same way a
+person would look at a wall and name its color.
 """
 
 from typing import List, Optional, Tuple
@@ -27,7 +28,7 @@ WALL_PALETTE: List[Tuple[str, Tuple[int, int, int]]] = [
 
 
 def nearest_color_name(rgb: Tuple[int, int, int], max_dist: float = 55.0) -> Optional[str]:
-    """rgb에 가장 가까운 팔레트 색 이름. max_dist보다 멀면 None(불확실)."""
+    """Closest palette color name to rgb, or None if nothing is within max_dist (too uncertain)."""
     best_name, best_dist = None, float("inf")
     r, g, b = rgb
     for name, (pr, pg, pb) in WALL_PALETTE:

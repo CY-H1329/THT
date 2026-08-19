@@ -1,27 +1,35 @@
-"""적(사람형 몹) 탐지 — 픽셀에서 방위·거리·신뢰도를 뽑는다.
+"""Enemy (humanoid mob) detection -- pulls bearing, distance, and confidence from pixels.
 
-VLM 기반 조준(agent.vlm.locate_enemy)은 호출당 ~2초가 걸려서 그동안
-계속 맞았고("느리고 붕뜬다" — 사용자 실측), 색상 규칙기반(예전
-agent.vision.enemy_bearing)은 저장된 방 벽색과의 단순 거리 비교라 조명
-때문에 벽 자체를 적으로 오판했다(dev_log.md). 이 모듈은 참고 레포
-(CY-H1329/THT, dev-mouvement 브랜치)의 agent/enemies.py에서 아이디어를
-얻어 우리 env로 재검증한 순수 CV 방식이다 — VLM 없이 프레임당 ~1~2ms.
+VLM-based aiming (agent.vlm.locate_enemy) took ~2 s per call, and we
+kept getting hit during that wait (slow and floaty, confirmed by the
+user). The earlier color-rule approach (agent.vision.enemy_bearing, now
+removed) just compared against the room's stored wall color by simple
+distance, and lighting made it mistake the wall itself for an enemy.
+This module took its approach from a reference repo (CY-H1329/THT,
+dev-mouvement branch -- an earlier branch of this same project) and
+re-verified it against our env -- pure CV, no VLM, roughly 1-2 ms per
+frame.
 
-몹의 생김새(miniworld Box 6개 + 얼굴 쿼드) 특징:
+What a mob (6 miniworld boxes + a face quad) looks like:
 
-* 색이 **진하다(채도 높음)**. 몸통/바지/피부는 원색 계열이라 채도가
-  높게 찍히고, 방 벽 팔레트(agent/palette.py의 12색)는 훨씬 탁하다.
-* **바닥에 서 있다**. 벽에 걸린 사진 액자와 갈리는 결정적 차이 — 액자는
-  공중에 떠 있어서 바닥 경계선 바로 위가 벽색이지만, 몹은 자기 색이
-  바닥 접점까지 이어진다.
-* **키가 대략 사람 크기(1.15~2.45m)**. 통·콘·오리 같은 작은 소품과
-  나무 같은 큰 소품을 걸러낸다(완벽하진 않음 — 나무는 키가 비슷해서
-  일부만 걸러짐, 한계로 report.md에 기록).
+* **Strongly saturated color.** The torso/pants/skin are solid,
+  saturated colors, while the room-wall palette (the 12 colors in
+  agent/palette.py) is much more muted.
+* **Standing on the floor.** The key difference from a wall-hung
+  picture frame: a frame floats in the air, so just above the floor
+  boundary is still wall color, while a mob's own color runs all the
+  way down to where it touches the floor.
+* **Roughly human height (1.15-2.45 m).** Filters out small props
+  (barrel/cone/duck) and large ones (a tree). Not perfect -- a tree is
+  close enough in height that it only gets partially filtered this way
+  (noted as a limitation in report.md).
 
-거리는 agent.geometry.floor_boundary()가 이미 계산해 둔 바닥 접점
-행/거리를 그대로 재사용한다(agent.perception 스타일 — 프레임당 한 번만
-계산). 2.6m(FLOOR_MIN_RANGE)보다 가까우면 바닥 접점이 화면 밖이라 못
-재므로, 대신 실루엣 꼭대기 행과 알려진 키로 거리를 거꾸로 추정한다.
+Distance reuses the floor-contact row/distance that
+agent.geometry.floor_boundary() already computed (same idea as a
+perception module: compute it once per frame). Closer than 2.6 m
+(FLOOR_MIN_RANGE), the floor-contact point is off-screen and can't be
+measured, so we instead work distance backward from the top of the
+silhouette and the known mob heights.
 """
 
 from __future__ import annotations
@@ -34,54 +42,60 @@ import numpy as np
 
 from agent import geometry as geo
 
-# 몹 박스로 볼 최소 채도. 참고 레포는 88을 썼지만 우리 WALL_PALETTE는
-# mustard(155)/rust(130)/brick(115)/terracotta(110)처럼 원색에 가까운
-# 벽색도 포함하고 있어서(agent/palette.py) 그대로 쓰면 위험하다.
-# tmp/verify_enemies.py로 실측: 실제 렌더된 적 픽셀 채도는 101~213
-# (중앙값 133), 같은 프레임의 벽 배경은 최대 81 — 여유를 두고 95로.
+# Minimum saturation to count as a mob box. The reference repo used 88,
+# but our WALL_PALETTE (agent/palette.py) includes near-primary wall
+# colors like mustard(155)/rust(130)/brick(115)/terracotta(110), so
+# reusing that value directly would be unsafe. Measured directly
+# (tmp/verify_enemies.py): real rendered enemy pixels saturate at
+# 101-213 (median 133), while wall background in the same frame tops
+# out at 81 -- 95 leaves a safe margin.
 MOB_SAT = 95
-# 바닥 접점 바로 위에서 색을 읽을 띠의 두께(px).
+# Thickness (px) of the band read just above the floor-contact point.
 FOOT_BAND = 10
 MOB_HEIGHTS = (1.5, 2.0)      # short / tall
 MIN_MOB_HEIGHT = 1.15
-NEAR_TOP_MARGIN = 22       # 근거리 후보의 실루엣 꼭대기 허용 행(지평선 기준)
-NEAR_DEFAULT_DIST = 1.8    # 키 역산이 발산할 때 쓸 근거리 대표값(m)
+NEAR_TOP_MARGIN = 22       # allowed silhouette-top row (from the horizon) for a near-range candidate
+NEAR_DEFAULT_DIST = 1.8    # fallback near-range distance (m) when height inversion doesn't converge
 MAX_MOB_HEIGHT = 2.45
-# 실측(dev_log.md): 실제 몹 셔츠/바지/피부는 양자화 후 고유색 ~3개,
-# 나무 캐노피는 면마다 음영이 달라 ~23개. 여유를 두고 8로.
+# Measured: a real mob's shirt/pants/skin quantize down to ~3 distinct
+# colors, while a tree canopy's shading varies per face and quantizes
+# to ~23. 8 leaves margin either way.
 MAX_COLOR_DIVERSITY = 8
 
 
 @dataclass
 class Mob:
-    bearing: float        # 현재 heading 기준 상대 방위(도, 좌 +)
-    distance: float       # m (2.6m 안쪽은 키 기반 추정치)
-    height: float         # 추정 실루엣 높이(m), 검산 불가 시 -1.0
+    bearing: float        # relative bearing from the current heading (deg, left is +)
+    distance: float       # m (below 2.6 m this is a height-based estimate)
+    height: float         # estimated silhouette height (m), -1.0 if it couldn't be cross-checked
     width_deg: float
     col_range: Tuple[int, int]
-    resolved: bool        # 바닥 접점으로 거리를 실측했는지
-    score: float          # 0~1, 몹다움
+    resolved: bool        # whether distance came from an actual floor-contact measurement
+    score: float          # 0-1, how mob-like this candidate is
 
 
 def detect(frame: np.ndarray, n_cols: int = 64,
            wall_rgb: Optional[tuple] = None,
            sat: Optional[np.ndarray] = None,
            boundary: Optional[tuple] = None) -> List[Mob]:
-    """프레임에서 몹 후보 목록을 반환한다 (가까운 순).
+    """Return the list of mob candidates in the frame, nearest first.
 
-    열 단위 루프는 전부 numpy로 접었다 — 매 스텝(전투 중 매 틱) 부르는
-    함수라 파이썬 루프면 예산을 많이 먹는다.
+    All the column-wise looping is vectorized in numpy -- this runs
+    every step (every tick during combat), so a plain Python loop would
+    eat too much of the time budget.
     """
     if sat is None:
         sat = geo.saturation(frame)
     rows, dists = boundary if boundary is not None else geo.floor_boundary(
         frame, n_cols, sat)
     cw = geo.FRAME_W // n_cols
-    # 열 묶음 단위 채도맵 (FRAME_H, n_cols). 묶음 안에서는 상위값을 취해
-    # 가느다란 몹이 배경에 묻히지 않게 한다.
+    # Saturation map bucketed by column (FRAME_H, n_cols). Within each
+    # bucket we take the max so a thin mob doesn't get averaged away by
+    # the background.
     satc = sat[:, :n_cols * cw].reshape(geo.FRAME_H, n_cols, cw).max(axis=2)
 
-    # 1) 바닥 접점 바로 위 FOOT_BAND 픽셀이 진한 색인가 = 바닥에 선 유채색 물체.
+    # 1) Is the FOOT_BAND strip just above the floor-contact point
+    #    strongly colored? -> a saturated object standing on the floor.
     y_hi = np.clip(rows.astype(int), int(geo.CY) + 1, geo.FRAME_H)
     offs = np.arange(FOOT_BAND)
     y_idx = np.clip(y_hi[:, None] - 1 - offs[None, :], int(geo.CY), geo.FRAME_H - 1)
@@ -92,7 +106,7 @@ def detect(frame: np.ndarray, n_cols: int = 64,
     bearings = geo.column_bearings(n_cols)
     col_w = geo.FOV_X_DEG / n_cols
 
-    # 2) 연속된 열 묶음으로 그룹화.
+    # 2) Group into runs of consecutive columns.
     mobs: List[Mob] = []
     edges = np.flatnonzero(np.diff(np.r_[False, standing, False]))
     for i, j in zip(edges[::2], edges[1::2]):
@@ -100,19 +114,23 @@ def detect(frame: np.ndarray, n_cols: int = 64,
         d_floor = float(np.min(dists[i:j]))
         resolved = d_floor > geo.FLOOR_MIN_RANGE + 0.01
 
-        # 3) 실루엣 꼭대기: 이 열 구간에서 진한 색이 이어지는 가장 윗 행.
+        # 3) Silhouette top: the highest row where a strong color still
+        #    runs across this column range.
         rows_strong = np.flatnonzero(strong[:, i:j].mean(axis=1) > 0.25)
         rows_strong = rows_strong[rows_strong >= geo.HUD_H]
         if len(rows_strong) == 0:
             continue
         y_top = float(rows_strong.min())
 
-        # 나무 오탐 방지(실측 확인, dev_log.md): 나무는 키가 몹과 겹쳐서
-        # (2.2m) 키만으로는 안 걸러지지만, 모양이 다르다 — 발밑(바닥에 닿은
-        # 줄기)은 좁고 꼭대기(캐노피)는 훨씬 넓게 퍼진다. 사람형 몹은
-        # 반대로 발밑(다리)이 머리보다 좁지 않다. 실루엣 맨 윗행에서
-        # 좌우로 이어지는 진한색 폭을, 발밑 열 구간 폭과 비교해서 훨씬
-        # 넓으면(캐노피 패턴) 후보에서 제외한다.
+        # Tree false-positive guard (measured directly): a tree's
+        # height (2.2 m) overlaps a mob's, so height alone doesn't
+        # filter it out -- but its shape is different. A tree's base
+        # (the trunk touching the floor) is narrow while its top (the
+        # canopy) spreads much wider; a humanoid mob is the opposite --
+        # its base (legs) is never narrower than its head. We compare
+        # the width of the strong-color run at the silhouette's very
+        # top row to the width of the base column range, and drop the
+        # candidate if the top is much wider (a canopy shape).
         top_row = int(y_top)
         lo, hi = int(i), int(j)
         while lo > 0 and strong[top_row, lo - 1]:
@@ -128,14 +146,16 @@ def detect(frame: np.ndarray, n_cols: int = 64,
             distance = d_floor
             height = geo.height_at(y_top, distance)
         else:
-            # 바닥 접점이 화면 밖(2.6m 안쪽). 키 검산이 불가능하므로 대신
-            # "실루엣이 지평선 근처까지 올라오는가"로 키를 가늠한다.
+            # Floor-contact point is off-screen (within 2.6 m), so we
+            # can't cross-check height that way. Instead we gauge
+            # plausibility by whether the silhouette reaches up near
+            # the horizon.
             if y_top > geo.CY + NEAR_TOP_MARGIN:
                 continue
             cand = [geo.dist_for_height(y_top, h) for h in MOB_HEIGHTS]
             cand = [d for d in cand if 0.4 <= d <= geo.FLOOR_MIN_RANGE + 0.6]
             distance = min(cand) if cand else NEAR_DEFAULT_DIST
-            height = None                      # 검산 불가 → 키 게이트 생략
+            height = None                      # can't cross-check -> skip the height gate
 
         width_deg = abs(bearings[j - 1] - bearings[i]) + col_w
         score = _score(height, width_deg, distance, frame, seg, wall_rgb)
@@ -154,36 +174,38 @@ def detect(frame: np.ndarray, n_cols: int = 64,
 
 def _score(height: Optional[float], width_deg: float, distance: float,
            frame: np.ndarray, seg: slice, wall_rgb) -> float:
-    """몹다움 0~1. 0이면 후보에서 제외."""
+    """How mob-like this candidate is, 0-1. 0 means drop it."""
     if height is not None and not (MIN_MOB_HEIGHT <= height <= MAX_MOB_HEIGHT):
-        return 0.0                     # 통/콘/오리처럼 낮거나, 벽처럼 높다
+        return 0.0                     # too short (barrel/cone/duck) or too tall (wall-like)
     max_w = math.degrees(2 * math.atan(1.3 / max(distance, 0.5))) + 6.0
     if width_deg > max_w:
-        return 0.0                     # 벽면처럼 넓게 퍼져 있다
+        return 0.0                     # spread out too wide, like a flat wall surface
     if _color_diversity(frame, seg) > MAX_COLOR_DIVERSITY:
-        return 0.0                     # 실측 확인: 나무는 캐노피 모양이 몹 키(2.2m)와
-                                        # 겹쳐서 키/너비만으론 안 걸러지는 경우가 있다
-                                        # (dev_log.md). 몹은 셔츠/바지/피부가 각각 단색
-                                        # (양자화 후 고유색 ~3개)인데, 나무는 면마다 음영이
-                                        # 달라 색이 훨씬 다양하다(실측: 나무 23개 vs 몹 3개).
+        return 0.0                     # measured: a tree's canopy shape can overlap a mob's
+                                        # height (2.2 m), so height/width alone sometimes can't
+                                        # filter it out. A mob's shirt/pants/skin are each a
+                                        # solid color (quantizes to ~3 colors), while a tree's
+                                        # shading varies per face and is far more diverse
+                                        # (measured: ~23 for a tree vs ~3 for a mob).
     earned, possible = 0.0, 0.0
     if wall_rgb is not None:
         possible += 1.0
         if not geo.color_close(geo.region_color(frame, seg.start, seg.stop),
                                 wall_rgb, tol=45):
-            earned += 1.0          # 방 벽색과 뚜렷이 다르다
+            earned += 1.0          # clearly not the room's wall color
     possible += 1.0
     if _vertical_color_layers(frame, seg) >= 2:
-        earned += 1.0              # 셔츠/바지/피부가 세로로 쌓여 있다
+        earned += 1.0              # shirt/pants/skin stacked vertically
     return 0.6 + 0.4 * (earned / possible if possible else 0.0)
 
 
 def _vertical_color_layers(frame: np.ndarray, seg: slice,
                             tol: int = 45) -> int:
-    """열 구간을 세로로 훑어 '뚜렷이 다른 진한 색' 층이 몇 개인지 센다.
+    """Scan this column range top-to-bottom and count how many
+    "clearly distinct, saturated" color layers there are.
 
-    몹은 셔츠/바지/피부가 세로로 쌓여 2~3층이 나오고, 단색 소품이나 벽은
-    1층이다.
+    A mob has shirt/pants/skin stacked vertically, giving 2-3 layers;
+    a solid-color prop or a wall gives 1.
     """
     band = frame[int(geo.CY) - 60:geo.FRAME_H, seg]
     if band.size == 0:
@@ -200,12 +222,14 @@ def _vertical_color_layers(frame: np.ndarray, seg: slice,
 
 
 def _color_diversity(frame: np.ndarray, seg: slice, quant: int = 24) -> int:
-    """열 구간의 유채색 픽셀을 양자화해서 서로 다른 색이 몇 종류인지 센다.
+    """Quantize the saturated pixels in this column range and count how many distinct colors remain.
 
-    실측(tmp/verify_enemies.py 계열): 실제 몹은 셔츠/바지/피부가 각각
-    단색 렌더링이라 양자화 후 고유색이 ~3개인데, 나무는 캐노피가 면마다
-    다르게 음영져서 ~23개까지 나온다. 몹 키(2.2m)가 나무 키와 겹쳐서
-    키/너비 게이트만으론 못 거르는 나무를 이걸로 추가로 거른다.
+    Measured (tmp/verify_enemies.py and related scripts): a real mob's
+    shirt/pants/skin each render as a single flat color, so after
+    quantizing there are only ~3 distinct colors, while a tree's canopy
+    shades differently per face and produces up to ~23. Since a mob's
+    height range (2.2 m) overlaps a tree's, this catches trees that the
+    height/width gates alone can't filter out.
     """
     band = frame[int(geo.CY) - 60:geo.FRAME_H, seg]
     if band.size == 0:
@@ -219,47 +243,64 @@ def _color_diversity(frame: np.ndarray, seg: slice, quant: int = 24) -> int:
     return int(len(np.unique(quantized, axis=0)))
 
 
-# --- 근접(공격 사거리 이내) 전용 저비용 방위 추정 --------------------------
-# 실측으로 발견(dev_log.md, seed=7 실제 전투 프레임): detect()의 바닥
-# 접점/사람 비율 판정은 "적이 화면 중앙~하단에 사람 모양으로 작게 보이는"
-# 중간 거리 기준이라, FLEE strike 진입 시점(=이미 맞아서 적이 1.3~1.5m
-# 코앞에 있음, 상단 주석 참고)에는 몸통이 화면을 거의 다 채워 바닥이 안
-# 보이고 실루엣 비율도 안 맞아 구조적으로 0개 탐지된다 — 그 결과 매
-# 전투가 CV를 한 번도 못 쓰고 곧장 24방향 sweep(최대 72틱)으로 빠져서
-# "예전처럼 즉각적으로 안 죽인다"는 원인이었다. 이 함수는 사람형 판정을
-# 아예 안 하고 "바닥도 아니고 이 방의 벽색도 아닌 큰 덩어리"의 무게중심
-# 방위만 구한다 — FLEE strike는 HP가 실제로 깎여서 진입한 상태라(=바로
-# 앞에 뭔가 있다는 게 이미 확정됨) 일반 스캔과 달리 오탐 걱정이 적다.
-_CLOSE_RANGE_MIN_FRAC = 0.15   # 이 이하로 "벽도 바닥도 아닌" 영역이면 무시
-_CLOSE_RANGE_WALL_DIFF = 120   # RGB 채널합 기준 벽색과의 최소 차이
-# 실측으로 발견(dev_log.md, seed=7): 적을 실제로 죽인 뒤에도(HP 0, 몸체가
-# 렌더에서 제거됨) 문틈으로 보이는 다른 방/복도 풍경이 "바닥도 벽도 아닌
-# 큰 덩어리" 조건을 계속 만족해서, 죽은 상대를 계속 "공격"(전부 빗나감)
-# 하며 sweep까지 이어지는 낭비가 있었다. 진짜 근접 적은 발이 바로 앞
-# 바닥에 닿아 있어서 몸체가 화면 맨 아래 몇 행까지 반드시 이어지는데
-# (실측: 킬 직전 프레임은 맨 아래 20%의 29%가 후보 픽셀), 문틈 너머
-# 풍경은 그 앞에 진짜 바닥이 있어서 맨 아래까지 안 내려온다(실측: 0%).
-# 이 차이로 "코앞의 진짜 몸체"와 "멀리 문틈 너머 풍경"을 가른다.
-_CLOSE_RANGE_BOTTOM_FRAC_MIN = 0.20  # 맨 아래 20% 구간에서 요구하는 최소 후보 비율
-_CLOSE_RANGE_BOTTOM_BAND = 0.20      # 프레임 하단 몇 %를 "발밑" 구간으로 볼지
+# Close-range (within attack range) low-cost bearing estimate
+# Discovered by measurement (real combat frames, seed 7): detect()'s
+# floor-contact/silhouette-ratio check is tuned for an enemy that
+# appears small and human-shaped in the middle-to-lower part of the
+# frame -- mid-range. By the time we're in FLEE strike (meaning we've
+# already been hit, so the enemy is 1.3-1.5 m away, right in front of
+# us -- see the note at the top of explorer.py), its body fills almost
+# the whole frame, the floor isn't visible, and the silhouette ratio no
+# longer matches, so detect() structurally returns zero candidates.
+# That meant every fight skipped CV aiming entirely and dropped straight
+# into the 24-direction sweep (up to 72 ticks) -- the reason kills felt
+# much slower than before. This function skips the humanoid-shape check
+# entirely and just finds the bearing of the centroid of "a big blob
+# that's neither floor nor this room's wall color" -- FLEE strike is
+# only entered once HP has actually dropped (so we already know
+# something is right in front of us), which makes false positives much
+# less of a concern than during a general scan.
+_CLOSE_RANGE_MIN_FRAC = 0.15   # ignore if "neither floor nor wall" covers less than this fraction
+_CLOSE_RANGE_WALL_DIFF = 120   # minimum RGB-channel-sum difference from the wall color
+# Discovered by measurement (seed 7): even after actually killing the
+# enemy (HP 0, mesh removed from the render), a different room/hallway
+# glimpsed through a doorway can still satisfy "neither floor nor wall,"
+# so we kept "attacking" the dead target (all misses) and wastefully
+# fell through to a sweep anyway. A genuinely close enemy has its feet
+# right on the floor in front of us, so its body is guaranteed to
+# extend down to the very bottom rows of the frame (measured: the frame
+# right before a kill has candidate pixels across 29% of the bottom
+# 20% band), while a scene glimpsed through a doorway has real floor in
+# front of it and never reaches that far down (measured: 0%). This
+# difference is what separates "a real body right in front of us" from
+# "scenery glimpsed far off through a doorway."
+_CLOSE_RANGE_BOTTOM_FRAC_MIN = 0.20  # minimum candidate-pixel fraction required in the bottom 20% band
+_CLOSE_RANGE_BOTTOM_BAND = 0.20      # how much of the bottom of the frame counts as the "at our feet" band
 
 
 def close_range_bearing(frame: np.ndarray, wall_rgb: Optional[Tuple[int, int, int]] = None,
                          min_frac: float = _CLOSE_RANGE_MIN_FRAC,
                          require_bottom_band: bool = True) -> Optional[float]:
-    """근접 전투 전용: 적일 가능성이 높은 큰 덩어리의 방위(도)만 빠르게 추정.
+    """Close-combat only: quickly estimate the bearing of a large, likely-enemy blob.
 
-    None을 반환하면 호출자가 detect()(중간 거리용)나 sweep으로 넘어가면
-    된다. HUD 아래 전체 프레임에서 "바닥(무채색 체커보드)도 아니고
-    (wall_rgb가 있으면) 이 방 벽색과도 다른" 픽셀의 열(column) 방향
-    무게중심을 방위로 환산한다.
-
-    require_bottom_band: 화면 맨 아래(발밑)까지 이어지는지 요구할지.
-    죽인 뒤 문틈 너머 풍경을 계속 적으로 오인하는 걸 막으려고 넣은
-    조건인데(위 상단 주석), 실측(dev_log.md)해보니 문틈 사이로 비스듬히
-    보이는 진짜(아직 살아있는) 적도 이 조건에 걸려 못 잡고 sweep으로
-    빠졌다 — 아직 한 번도 못 맞춘 시점(=죽여서 사라졌을 리 없음)엔
-    호출자가 이 조건을 꺼서 더 적극적으로 잡게 한다.
+    Returns None if the caller should fall back to detect() (mid-range)
+    or the sweep. Across the whole frame below the HUD, it converts the
+    column-wise centroid of pixels that are "not the floor (achromatic
+    checkerboard), and (if wall_rgb is given) not this room's wall
+    color either" into a bearing. A blob that doesn't extend down to
+    the very bottom of the frame (at our feet) is likely scenery seen
+    through a doorway and gets excluded (see the comment above) -- but
+    this bottom-band requirement is only enforced when
+    require_bottom_band=True. A bug we found by measurement: always
+    enforcing it meant that even the very first detection attempt of a
+    fresh engagement (where there's no risk yet of attacking a corpse,
+    since nothing has landed a hit) would miss a genuinely visible
+    enemy seen at an angle or through a gap, and fall straight through
+    to the slow 24-direction sweep (this is what made combat feel
+    sluggish -- reproduced and confirmed on request: the same
+    face-on frame is missed with require_bottom_band=True, but found
+    correctly at bearing -0.85 deg with it False). The caller passes
+    this flag based on whether this engagement has landed a hit yet.
     """
     body = frame[geo.HUD_H:, :, :]
     sat = geo.saturation(body)
